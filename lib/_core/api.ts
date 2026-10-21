@@ -7,6 +7,13 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+class ApiHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiHttpError";
+  }
+}
+
 export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -44,7 +51,6 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     console.log("[API] Response received");
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[API] Error response received");
       let errorMessage = errorText;
       try {
         const errorJson = JSON.parse(errorText);
@@ -52,7 +58,10 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       } catch {
         // Not JSON, use text as is
       }
-      throw new Error(errorMessage || `API call failed: ${response.statusText}`);
+      throw new ApiHttpError(
+        response.status,
+        errorMessage || `API call failed: ${response.statusText}`,
+      );
     }
 
     const contentType = response.headers.get("content-type");
@@ -66,7 +75,9 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     console.log("[API] Text response received");
     return (text ? JSON.parse(text) : {}) as T;
   } catch (error) {
-    console.error("[API] Request failed");
+    if (!(error instanceof ApiHttpError) || error.status >= 500) {
+      console.error("[API] Request failed");
+    }
     if (error instanceof Error) {
       throw error;
     }
@@ -116,9 +127,11 @@ export async function getMe(): Promise<{
   try {
     const result = await apiCall<{ user: any }>("/api/auth/me");
     return result.user || null;
-  } catch {
-    console.error("[API] getMe failed");
-    return null;
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 401) {
+      return null;
+    }
+    throw error;
   }
 }
 
