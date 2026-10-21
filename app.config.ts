@@ -32,7 +32,7 @@ const env = {
   appSlug: "machiaru",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519664029594046/zkOweoknBAKklTcJ.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -84,7 +84,7 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
     intentFilters: [
       {
         action: "VIEW",
@@ -107,6 +107,8 @@ const config: ExpoConfig = {
   plugins: [
     "expo-asset",
     "expo-router",
+    ["expo-image-picker", { photosPermission: "訪問した場所の記録に写真へのアクセスを許可します。" }],
+    ["expo-location", { locationWhenInUsePermission: "歩行ルートを地図に記録し、現在地を表示するため、使用中の位置情報にアクセスします。" }],
     [
       "expo-audio",
       {

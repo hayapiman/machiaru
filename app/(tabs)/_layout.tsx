@@ -1,40 +1,37 @@
 import { Tabs } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Ionicons } from "@expo/vector-icons";
 import { Platform } from "react-native";
-import { useColors } from "@/hooks/use-colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { HapticTab } from "@/components/haptic-tab";
+import { brand, typeface } from "@/lib/brand";
 
 export default function TabLayout() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
-  const tabBarHeight = 56 + bottomPadding;
+  const bottomPadding = Platform.OS === "web" ? 10 : Math.max(insets.bottom, 8);
+  const tabBarHeight = 58 + bottomPadding;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarActiveTintColor: brand.terracotta,
+        tabBarInactiveTintColor: brand.muted,
+        tabBarLabelStyle: { fontFamily: typeface.medium, fontSize: 10, marginTop: 1 },
         tabBarStyle: {
-          paddingTop: 8,
+          paddingTop: 7,
           paddingBottom: bottomPadding,
           height: tabBarHeight,
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          borderTopWidth: 0.5,
+          backgroundColor: brand.paperLight,
+          borderTopColor: brand.line,
+          borderTopWidth: 1,
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: "地図", tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="records" options={{ title: "記録", tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="groups" options={{ title: "みんな", tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ title: "わたし", tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} /> }} />
     </Tabs>
   );
 }
