@@ -136,6 +136,7 @@ export const appRouter = router({
                 longitude: z.number().min(-180).max(180),
                 timestamp: z.number().int().nonnegative(),
                 speedMps: z.number().nullable().optional(),
+                breakBefore: z.boolean().optional(),
               }),
             )
             .max(5000),

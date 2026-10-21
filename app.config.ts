@@ -84,7 +84,7 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+    permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACTIVITY_RECOGNITION"],
     intentFilters: [
       {
         action: "VIEW",
@@ -109,6 +109,7 @@ const config: ExpoConfig = {
     "expo-router",
     ["expo-image-picker", { photosPermission: "訪問した場所の記録に写真へのアクセスを許可します。" }],
     ["expo-location", { locationWhenInUsePermission: "歩行ルートを地図に記録し、現在地を表示するため、使用中の位置情報にアクセスします。" }],
+    ["expo-sensors", { motionPermission: "歩数を記録するため、モーションデータへのアクセスを許可します。" }],
     [
       "expo-audio",
       {

@@ -7,6 +7,7 @@ import { AppButton, Card, EmptyNote, Heading, Metric, Page, SectionLabel, Tag, f
 import { StaticMap, DEFAULT_CENTER } from "@/components/map/static-map";
 import { SpotPhoto } from "@/components/spot-photo";
 import { useAuth } from "@/hooks/use-auth";
+import { DemoGroupPreview } from "@/components/demo-group-preview";
 import { brand, typeface } from "@/lib/brand";
 import { trpc } from "@/lib/trpc";
 import type { RoutePoint } from "@/drizzle/schema";
@@ -16,7 +17,10 @@ const fieldStyle = { minHeight: 46, borderWidth: 1, borderColor: brand.line, bor
 function reduceRoute(points: RoutePoint[], maximum = 150) {
   if (points.length <= maximum) return points;
   const stride = (points.length - 1) / (maximum - 1);
-  return Array.from({ length: maximum }, (_, index) => points[Math.round(index * stride)]);
+  const sampled = Array.from({ length: maximum }, (_, index) => points[Math.round(index * stride)]);
+  const important = points.filter((point) => point.breakBefore);
+  return [...new Map([...sampled, ...important].map((point) => [point.timestamp, point])).values()]
+    .sort((a, b) => a.timestamp - b.timestamp);
 }
 
 function GroupsContent() {
@@ -24,6 +28,7 @@ function GroupsContent() {
   const groupQuery = trpc.groups.list.useQuery(undefined, { staleTime: 15000 });
   const groups = useMemo(() => groupQuery.data ?? [], [groupQuery.data]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showDemo, setShowDemo] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [message, setMessage] = useState("");
@@ -116,6 +121,17 @@ function GroupsContent() {
   return (
     <Page>
       <Heading eyebrow="WALK TOGETHER" title="みんなの街歩き" subtitle="仲間とグループを作って、歩いた道や寄り道を共有。" />
+      <Card style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 14 }}>ルートと写真を試す</Text>
+            <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11 }}>3人の架空メンバーによるサンプル共有フィード</Text>
+          </View>
+          <Tag tone="yellow">DEMO</Tag>
+        </View>
+        <AppButton label={showDemo ? "サンプルを閉じる" : "サンプルグループを表示"} variant="outline" small onPress={() => setShowDemo((value) => !value)} />
+      </Card>
+      {showDemo ? <DemoGroupPreview /> : null}
       <Card style={{ gap: 12 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}><Ionicons name="people-circle-outline" size={22} color={brand.terracotta} /><Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 15 }}>新しいグループ</Text></View>
         <TextInput value={groupName} onChangeText={setGroupName} placeholder="例：土曜の散歩部" placeholderTextColor="#A99A8C" style={fieldStyle} />

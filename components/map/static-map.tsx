@@ -69,6 +69,15 @@ function getMapSize(width: number, height: number): MapSize {
   return { width: mapWidth, height: mapHeight };
 }
 
+function splitRoute(points: RoutePoint[]): RoutePoint[][] {
+  const lines: RoutePoint[][] = [];
+  for (const point of points) {
+    if (!lines.length || point.breakBefore) lines.push([]);
+    lines[lines.length - 1].push(point);
+  }
+  return lines.filter((line) => line.length > 0);
+}
+
 export function StaticMap({
   center = DEFAULT_CENTER,
   zoom = 15,
@@ -110,7 +119,7 @@ export function StaticMap({
     { enabled: authenticated && dimensions.width > 0, staleTime: 60000, retry: false },
   );
   const centerWorld = worldPosition(center, zoom);
-  const routeSets = routeLines ?? (routePoints.length ? [routePoints] : []);
+  const routeSets = (routeLines ?? [routePoints]).flatMap(splitRoute);
   const routeCoordinates = routeSets.map((line) => line.map((point) => {
     const world = worldPosition(point, zoom);
     const x = dimensions.width / 2 + (world.x - centerWorld.x) * (dimensions.width / mapSize.width);

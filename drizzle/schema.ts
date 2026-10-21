@@ -32,6 +32,7 @@ export type RoutePoint = {
   longitude: number;
   timestamp: number;
   speedMps?: number | null;
+  breakBefore?: boolean;
 };
 
 export const userProfiles = mysqlTable("user_profiles", {

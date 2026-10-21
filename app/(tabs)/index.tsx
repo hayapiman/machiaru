@@ -86,6 +86,21 @@ function MapHome({ userName }: { userName: string }) {
   const selectedSpot = useMemo(() => spots.find((spot) => spot.id === selectedSpotId) ?? null, [selectedSpotId, spots]);
   const mapMarkers = useMemo(() => spots.map((spot) => ({ latitude: spot.latitude, longitude: spot.longitude })), [spots]);
   const averageSpeedKmh = tracker.elapsedSeconds > 0 ? ((tracker.distanceMeters / tracker.elapsedSeconds) * 3.6).toFixed(1) : "0.0";
+  const gpsAccuracyLabel = tracker.runState === "paused"
+    ? "GPS一時停止"
+    : tracker.gpsAccuracyMeters === null
+      ? "GPS測位中"
+      : `GPS ±${Math.round(tracker.gpsAccuracyMeters)}m`;
+  const gpsAccuracyTone: "green" | "yellow" | "red" | "paper" = tracker.runState === "paused"
+    ? "paper"
+    : tracker.gpsAccuracyMeters === null || tracker.gpsAccuracyMeters > 30
+      ? tracker.gpsAccuracyMeters !== null && tracker.gpsAccuracyMeters > 45 ? "red" : "yellow"
+      : "green";
+  const gpsHint = tracker.runState === "paused"
+    ? "一時停止中は時間・距離・歩数を計測しません。"
+    : tracker.gpsAccuracyMeters !== null && tracker.gpsAccuracyMeters > 45
+      ? "精度が低いため、この位置は距離に加算していません。空の開けた場所で再測位してください。"
+      : "精度の低い位置や急な飛び値は距離に加算しません。";
 
   useEffect(() => {
     const last = tracker.routeData.at(-1);
@@ -294,7 +309,7 @@ function MapHome({ userName }: { userName: string }) {
             <Text style={{ color: brand.ink, fontSize: 16, fontFamily: typeface.bold }}>{tracker.runState === "idle" ? "歩く時間を、思い出に。" : tracker.runState === "paused" ? "ひと休み中" : "いいペースです"}</Text>
             <Text style={{ color: brand.muted, fontSize: 11, fontFamily: typeface.regular, marginTop: 3 }}>{tracker.runState === "idle" ? "記録ボタンでルート計測をはじめます" : tracker.estimatedSteps ? "歩数は移動距離からの目安です" : "時間・距離・歩数を記録しています"}</Text>
           </View>
-          {tracker.runState !== "idle" ? <Tag tone="green">GPS ON</Tag> : null}
+          {tracker.runState !== "idle" ? <Tag tone={gpsAccuracyTone}>{gpsAccuracyLabel}</Tag> : null}
         </View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#EFE4D5", paddingVertical: 13 }}>
           <Metric label="時間" value={formatDuration(tracker.elapsedSeconds)} accent />
@@ -303,6 +318,12 @@ function MapHome({ userName }: { userName: string }) {
           <Metric label="速度" value={formatPace(tracker.currentSpeedMps)} unit="km/h" />
         </View>
         {tracker.runState !== "idle" ? <Text style={{ color: brand.muted, fontFamily: typeface.medium, fontSize: 11 }}>平均速度　{averageSpeedKmh} km/h</Text> : null}
+        {tracker.runState !== "idle" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <Tag tone={tracker.estimatedSteps ? "yellow" : "green"}>{tracker.estimatedSteps ? "歩数は推定" : "端末歩数計"}</Tag>
+            <Text style={{ flex: 1, color: brand.muted, fontFamily: typeface.regular, fontSize: 10, lineHeight: 16 }}>{gpsHint}</Text>
+          </View>
+        ) : null}
         {tracker.locationError ? <Text style={{ color: brand.terracottaDark, fontFamily: typeface.regular, fontSize: 12 }}>{tracker.locationError}</Text> : null}
         {notice ? <Text style={{ color: brand.sage, fontFamily: typeface.medium, fontSize: 12 }}>{notice}</Text> : null}
         {tracker.runState === "idle" ? (
