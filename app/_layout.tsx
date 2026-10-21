@@ -82,6 +82,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="oauth/callback" />
             <Stack.Screen name="walk/[id]" />
+            <Stack.Screen name="walk/map" />
           </Stack>
           <StatusBar style="dark" />
         </QueryClientProvider>

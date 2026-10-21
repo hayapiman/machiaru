@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
@@ -63,6 +64,8 @@ function MapHome({ userName }: { userName: string }) {
 
   const [center, setCenter] = useState<Coordinate>(DEFAULT_CENTER);
   const [zoom, setZoom] = useState(15);
+  const [manualCurrentLocation, setManualCurrentLocation] = useState<Coordinate | null>(null);
+  const [manualCurrentLocationAccuracyMeters, setManualCurrentLocationAccuracyMeters] = useState<number | null>(null);
   const [addSpotMode, setAddSpotMode] = useState(false);
   const [spotCoordinates, setSpotCoordinates] = useState<Coordinate | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
@@ -85,6 +88,8 @@ function MapHome({ userName }: { userName: string }) {
   const spots = useMemo(() => spotsQuery.data ?? [], [spotsQuery.data]);
   const selectedSpot = useMemo(() => spots.find((spot) => spot.id === selectedSpotId) ?? null, [selectedSpotId, spots]);
   const mapMarkers = useMemo(() => spots.map((spot) => ({ latitude: spot.latitude, longitude: spot.longitude })), [spots]);
+  const currentLocation = tracker.currentLocation ?? manualCurrentLocation;
+  const currentLocationAccuracyMeters = tracker.currentLocation ? tracker.currentLocationAccuracyMeters : manualCurrentLocationAccuracyMeters;
   const averageSpeedKmh = tracker.elapsedSeconds > 0 ? ((tracker.distanceMeters / tracker.elapsedSeconds) * 3.6).toFixed(1) : "0.0";
   const gpsAccuracyLabel = tracker.runState === "paused"
     ? "GPS一時停止"
@@ -130,6 +135,8 @@ function MapHome({ userName }: { userName: string }) {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const next = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       setCenter(next);
+      setManualCurrentLocation(next);
+      setManualCurrentLocationAccuracyMeters(position.coords.accuracy ?? null);
       lastRecenter.current = next;
     } catch {
       setNotice("現在地を取得できませんでした。屋外で再度お試しください。");
@@ -147,6 +154,8 @@ function MapHome({ userName }: { userName: string }) {
       await tracker.resume();
       return;
     }
+    setManualCurrentLocation(null);
+    setManualCurrentLocationAccuracyMeters(null);
     await tracker.start();
   };
 
@@ -273,6 +282,7 @@ function MapHome({ userName }: { userName: string }) {
   };
 
   const walkedToday = (walksQuery.data ?? []).filter((walk) => new Date(walk.startedAt).toDateString() === new Date().toDateString());
+  const latestWalk = walksQuery.data?.[0] ?? null;
 
   return (
     <Page>
@@ -291,16 +301,50 @@ function MapHome({ userName }: { userName: string }) {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable accessibilityLabel="地図を縮小" onPress={() => setZoom((value) => Math.max(3, value - 1))} style={mapControlStyle}><Ionicons name="remove" size={19} color={brand.ink} /></Pressable>
             <Pressable accessibilityLabel="地図を拡大" onPress={() => setZoom((value) => Math.min(19, value + 1))} style={mapControlStyle}><Ionicons name="add" size={19} color={brand.ink} /></Pressable>
-            <Pressable accessibilityLabel="現在地へ移動" onPress={centerOnMe} style={mapControlStyle}><Ionicons name="locate-outline" size={17} color={brand.terracotta} /></Pressable>
+            <Pressable accessibilityLabel="現在地へ移動して青い点を表示" onPress={centerOnMe} style={mapControlStyle}><Ionicons name="locate-outline" size={20} color="#256FD6" /></Pressable>
           </View>
         </View>
-        <StaticMap center={center} zoom={zoom} markers={mapMarkers} routePoints={tracker.routeData} onMapPan={panMap} onMapTap={addSpotMode ? openSpotSheet : undefined} />
+        <StaticMap
+          center={center}
+          zoom={zoom}
+          markers={mapMarkers}
+          routePoints={tracker.routeData}
+          currentLocation={currentLocation}
+          currentLocationAccuracyMeters={currentLocationAccuracyMeters}
+          onMapPan={panMap}
+          onZoomChange={setZoom}
+          onMapTap={addSpotMode ? openSpotSheet : undefined}
+        />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, flex: 1 }}>
             {addSpotMode ? "地図をタップして、場所を選んでください" : `${spots.length}か所の思い出 · ${walkedToday.length}回の歩行`}
           </Text>
-          <AppButton label={addSpotMode ? "地図で場所を選択中" : "＋ スポット追加"} variant={addSpotMode ? "soft" : "outline"} small onPress={() => setAddSpotMode((value) => !value)} />
+          <AppButton label={addSpotMode ? "地図で場所を選択中" : "＋ スポット追加"} variant={addSpotMode ? "soft" : "outline"} onPress={() => setAddSpotMode((value) => !value)} />
         </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ width: 13, height: 13, borderRadius: 7, backgroundColor: "#256FD6", borderWidth: 2, borderColor: "#FFFFFF" }} />
+          <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, flex: 1 }}>
+            {currentLocation
+              ? `青い点が現在地${currentLocationAccuracyMeters == null ? "" : ` · GPS ±${Math.round(currentLocationAccuracyMeters)}m`}`
+              : "現在地ボタンを押すと、地図に青い点で表示します"}
+          </Text>
+          <Text style={{ color: brand.terracotta, fontFamily: typeface.medium, fontSize: 10 }}>線＝歩いた道</Text>
+        </View>
+        {latestWalk ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="最近の歩行ルートを大きな地図で見る"
+            onPress={() => router.push({ pathname: "/walk/map", params: { walkId: String(latestWalk.id) } })}
+            style={({ pressed }) => ({ minHeight: 54, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 15, borderRadius: 17, backgroundColor: brand.card, borderWidth: 1, borderColor: brand.line, opacity: pressed ? 0.82 : 1 })}
+          >
+            <Ionicons name="map-outline" size={21} color={brand.terracotta} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 13 }}>歩いた道を大きく見る</Text>
+              <Text numberOfLines={1} style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 10 }}>{latestWalk.title || "最近の街歩き"} · 地図を拡大して確認</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={brand.muted} />
+          </Pressable>
+        ) : null}
       </View>
 
       <Card style={{ gap: 15 }}>
@@ -430,7 +474,7 @@ function MapHome({ userName }: { userName: string }) {
   );
 }
 
-const mapControlStyle = { width: 34, height: 34, borderRadius: 12, backgroundColor: brand.card, borderWidth: 1, borderColor: brand.line, alignItems: "center" as const, justifyContent: "center" as const };
+const mapControlStyle = { width: 48, height: 48, borderRadius: 16, backgroundColor: brand.card, borderWidth: 1, borderColor: brand.line, alignItems: "center" as const, justifyContent: "center" as const };
 const modalBackdrop = { flex: 1, backgroundColor: "rgba(35, 28, 23, 0.42)", justifyContent: "flex-end" as const };
 const sheetStyle = { backgroundColor: brand.paperLight, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingBottom: 28, gap: 14, maxHeight: "92%" as const };
 const sheetHandle = { width: 40, height: 4, borderRadius: 5, backgroundColor: brand.line, alignSelf: "center" as const, marginBottom: 1 };

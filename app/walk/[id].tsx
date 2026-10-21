@@ -39,6 +39,7 @@ export default function WalkDetailScreen() {
       <Pressable onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingVertical: 3 }}><Ionicons name="chevron-back" size={18} color={brand.terracotta} /><Text style={{ color: brand.terracotta, fontFamily: typeface.bold, fontSize: 12 }}>戻る</Text></Pressable>
       <Heading eyebrow="WALK DETAIL" title={walk.title || "街歩き"} subtitle={new Intl.DateTimeFormat("ja-JP", { dateStyle: "full", timeStyle: "short" }).format(new Date(walk.startedAt))} right={<Tag tone={walk.visibility === "group" ? "green" : "paper"}>{walk.visibility === "group" ? "グループ共有" : "自分のみ"}</Tag>} />
       <StaticMap center={center} zoom={zoom} routePoints={routePoints} height={300} />
+      <AppButton label="歩いた道を大きな地図で見る" variant="soft" onPress={() => router.push({ pathname: "/walk/map", params: { walkId: String(walk.id) } })} />
       <Card style={{ gap: 16 }}>
         <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 15 }}>この日の歩み</Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>

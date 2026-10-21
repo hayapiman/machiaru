@@ -16,6 +16,7 @@ import {
 
 type RunState = "idle" | "tracking" | "paused";
 type AccurateFix = RoutePoint & { accuracyMeters: number };
+type CurrentLocation = { latitude: number; longitude: number };
 type WalkResult = {
   startedAt: number;
   endedAt: number;
@@ -35,6 +36,8 @@ export function useWalkTracker() {
   const [stepCount, setStepCount] = useState(0);
   const [currentSpeedMps, setCurrentSpeedMps] = useState(0);
   const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
+  const [currentLocationAccuracyMeters, setCurrentLocationAccuracyMeters] = useState<number | null>(null);
   const [estimatedSteps, setEstimatedSteps] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [routeData, setRouteData] = useState<RoutePoint[]>([]);
@@ -89,6 +92,10 @@ export function useWalkTracker() {
     const rawAccuracy = position.coords.accuracy;
     const accuracy = rawAccuracy !== null && Number.isFinite(rawAccuracy) && rawAccuracy >= 0 ? rawAccuracy : null;
     setGpsAccuracyMeters(accuracy);
+    if (Number.isFinite(position.coords.latitude) && Number.isFinite(position.coords.longitude)) {
+      setCurrentLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      setCurrentLocationAccuracyMeters(accuracy);
+    }
     const now = Number.isFinite(position.timestamp) && position.timestamp > 0 ? position.timestamp : Date.now();
 
     if (
@@ -217,6 +224,8 @@ export function useWalkTracker() {
       estimatedStepsRef.current = false;
       setEstimatedSteps(false);
       setGpsAccuracyMeters(null);
+      setCurrentLocation(null);
+      setCurrentLocationAccuracyMeters(null);
       setDistanceMeters(0);
       setStepCount(0);
       setCurrentSpeedMps(0);
@@ -294,6 +303,8 @@ export function useWalkTracker() {
     stepCount,
     currentSpeedMps,
     gpsAccuracyMeters,
+    currentLocation,
+    currentLocationAccuracyMeters,
     estimatedSteps,
     locationError,
     routeData,
