@@ -16,9 +16,22 @@ import { getSessionCookieName, getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
+import { hasEmailPassword, loginWithEmail, registerEmailAccount, setEmailPasswordForUser } from "./email-auth";
 import { fetchStaticMap } from "./map-service";
 import { storagePut } from "./storage";
 import { storageGetSignedUrl } from "./storage";
+
+const emailInput = z.string().trim().email().max(320);
+const passwordInput = z
+  .string()
+  .min(12, "パスワードは12文字以上で入力してください。")
+  .max(128, "パスワードは128文字以内で入力してください。")
+  .refine((password) => password.trim().length > 0, "空白だけのパスワードは使えません。");
+const emailAuthInput = z.object({
+  email: emailInput,
+  password: passwordInput,
+  clientType: z.enum(["web", "native"]),
+});
 
 async function requireDb() {
   const db = await getDb();
@@ -50,6 +63,8 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+    emailLogin: publicProcedure.input(emailAuthInput).mutation(({ ctx, input }) => loginWithEmail(ctx, input)),
+    emailRegister: publicProcedure.input(emailAuthInput).mutation(({ ctx, input }) => registerEmailAccount(ctx, input)),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(getSessionCookieName(ctx.req), { ...cookieOptions, maxAge: -1 });
@@ -72,6 +87,7 @@ export const appRouter = router({
         displayName: profile?.displayName ?? ctx.user.name ?? "",
         avatarUrl,
         email: ctx.user.email,
+        emailLoginEnabled: await hasEmailPassword(ctx.user.id),
       };
     }),
     update: protectedProcedure
@@ -84,6 +100,14 @@ export const appRouter = router({
           .onDuplicateKeyUpdate({ set: { displayName: input.displayName } });
         return { displayName: input.displayName };
       }),
+    setEmailPassword: protectedProcedure
+      .input(
+        z.object({
+          newPassword: passwordInput,
+          currentPassword: passwordInput.optional(),
+        }),
+      )
+      .mutation(({ ctx, input }) => setEmailPasswordForUser(ctx, input)),
   }),
   walks: router({
     list: protectedProcedure.query(async ({ ctx }) => {

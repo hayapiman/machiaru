@@ -7,10 +7,10 @@
 ## 実装方式
 
 - **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。
-- **認証**: 提供済みManus OAuthを使う。Web Previewでは固定名`webdev_app_session`を読み書きし、`MANUS_JWT_SECRET`によるHS256検証、期限、有効な`MANUS_PROJECT_ID`との一致を確認する。HTTPS PreviewのCookieは`SameSite=None; Secure`にし、APIとPreviewで共有できるプロジェクト親ドメインを使う。埋め込みPreviewからのOAuth開始はトップレベル遷移を試し、認証後は`EXPO_WEB_PREVIEW_URL`へ戻す。ネイティブでは既存のDeep LinkとSecureStoreを使い、ログイン前の認証は偽装しない。
+- **認証**: 既存Manus OAuthを維持し、メールアドレス＋パスワードでの新規登録/ログインと、認証済みManusユーザーが同一アカウントへメールログインを紐付ける設定を加える。メール資格情報は専用テーブルに保存し、Node `scrypt`のsalt付きハッシュのみを保持する。パスワードは12〜128文字とし、失敗回数を制限する。メール認証セッションは30日で期限切れにする。ユーザー了承の制約としてメール確認、メール送信、メールでのパスワード再設定は提供しない。Web Previewでは固定名`webdev_app_session`を読み書きし、メール認証ではHttpOnly Cookieに加えてタブ単位の短期Bearer tokenを使い、第三者Cookieが遮断される埋め込みでもAPIアクセスを維持する。`MANUS_JWT_SECRET`によるHS256検証、期限、有効な`MANUS_PROJECT_ID`との一致を確認する。HTTPS PreviewのCookieは`SameSite=None; Secure`にし、APIとPreviewで共有できるプロジェクト親ドメインを使う。埋め込みPreviewからのOAuth開始はトップレベル遷移を試し、認証後は`EXPO_WEB_PREVIEW_URL`へ戻す。ネイティブではDeep LinkとSecureStoreを使い、ログイン前の認証は偽装しない。
 - **地図**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。画像サイズは実際の表示枠と同じ縦横比にし、経路線・パン・スポット選択の座標変換を一致させる。地図の中心、ズーム、現在地再取得、ドラッグ、地図タップからのスポット登録を提供する。
 - **位置/健康指標**: Expo Locationの`BestForNavigation`で前景の歩行中位置を取得する。水平精度の低いGPS点を距離計算から除外し、精度に応じた移動しきい値と歩行者向け速度上限で飛び値・静止時の揺れを抑える。現在速度は直近の有効区間を平滑化し、平均速度は一時停止を除いた計測時間で算出する。Expo SensorsのPedometer歩数は一時停止/再開を通して累積し、非対応環境では距離からの推定値と明示する。GPS水平精度、歩数の実測/推定区分、センサー不調時の説明を画面に表示する。
-- **データと権限**: Drizzleのusers拡張、walkSessions、visitedSpots、spotPhotos、walkGroups、groupMembersを使う。歩行とスポットは本人のみ、または選択グループへの共有として保存する。グループ向け一覧、詳細、地図、フィードは現メンバーに限定する。
+- **データと権限**: Drizzleのusers、emailCredentials、walkSessions、visitedSpots、spotPhotos、walkGroups、groupMembersを使う。パスワードハッシュ以外の秘密情報は保存しない。歩行とスポットは本人のみ、または選択グループへの共有として保存する。グループ向け一覧、詳細、地図、フィードは現メンバーに限定する。
 - **画像**: Expo Image Pickerで最大5枚を選択し、縮小JPEGにして保護されたtRPCアップロードからManus Storageへ送る。DBにはStorage参照と所有者/スポットの関連を内部保存し、画面には画像IDだけを返す。Web/ネイティブとも、署名URL発行時に本人またはグループ参加を確認し、安定URL/Storageキーをクライアントへ渡さない。
 - **画面構成**: マップ/記録、歩行履歴、グループ、プロフィールの4タブ。マップから記録開始、スポット追加、保存確認を行う。履歴から活動ルートと指標を見返し、最近のスポット一覧から詳細シートを開いてメモ、日時、全写真を閲覧する。グループ画面には実データの共有フィード/地図と、サンプルと明記したデモフィードを分けて表示する。
 - **デモ共有**: グループ画面で友人3名、複数の歩行ルート、訪問スポット写真を含む読み取り専用のローカルfixtureを見られるようにする。サンプル表示にはデモラベルを付け、実ユーザーや実招待コードを装わず、Managed Databaseへ書き込まない。
@@ -38,12 +38,12 @@ app/
   (tabs)/index.tsx        地図、記録コントロール、スポット登録/詳細
   (tabs)/records.tsx      個人の歩行履歴
   (tabs)/groups.tsx       グループ作成/参加、共有地図とフィード
-  (tabs)/profile.tsx      表示名/プロフィール写真/累計
+  (tabs)/profile.tsx      表示名/写真/累計とManusアカウントへのメールログイン連携
   oauth/callback.tsx      既存Manus OAuthコールバック
   walk/[id].tsx           保存済み歩行の詳細地図と指標
 components/
   map/static-map.tsx      Maps画像、SVGルート、寸法対応座標ピック/パン
-  login-gate.tsx          OAuthログイン前のブランド/説明画面
+  login-gate.tsx          Manus OAuthとメール/パスワードのログイン/登録画面
   machiaru-ui.tsx         紙片カード、指標、CTA、書式部品
   spot-photo.tsx          写真IDから認可済み署名URLを取得する表示
   demo-group-preview.tsx  ローカルfixtureの共有地図・ルート・写真フィード
@@ -59,8 +59,9 @@ server/
   storage.ts              既存Manus Storageアップロード/署名URLアダプター
   map-service.ts          Mapsプロキシのサーバー側画像取得
   _core/                  既存Express/tRPC/OAuth基盤
+  email-password.ts       scrypt、資格情報照合、認証失敗回数制限
   drizzle/
-    schema.ts             ユーザー、歩行、スポット、写真、グループのテーブル
+    schema.ts             ユーザー、メール資格情報、歩行、スポット、写真、グループのテーブル
     0001_*.sql             追記型マイグレーション
 assets/images/             アプリアイコン、スプラッシュ、Androidアイコン
 assets/demo/               ローカルのデモ共有フィード用写真
@@ -73,11 +74,12 @@ assets/demo/               ローカルのデモ共有フィード用写真
 - Maps画像はAPIサーバーからMapsプロキシ経由で取得し、画面側でReact Native SVGの軌跡を重ねる。地図タップ/パンは実際の画像サイズと同じ座標変換を使う。
 - 写真はログイン済みtRPCアップロードからManus Storageへ送り、DBに内部Storage参照を保持する。写真IDを受け取ったサーバーは本人所有または対象グループの現メンバーかを確認してから、一時署名URLを返す。安定パスへの公開プロキシはアプリAPIに登録しない。
 - グループ作成と作成者membershipはDBトランザクションで登録する。グループ一覧、共有地図、フィード、詳細、写真署名URLはメンバーシップをサーバーで検証する。デモグループの表示はローカルfixtureのみを用い、API/Database/storageへ送信しない。
+- メール登録時はアドレスを正規化し、ユニークな資格情報行とアプリユーザーをトランザクションで作る。Manusログイン済みのユーザーは自分の現在のManusメールにパスワードを設定して同一プロフィールへ紐付ける。WebはHttpOnly Cookieと有効期限付きsessionStorage Bearer fallback、ネイティブはSecureStoreのBearerセッションを使い、共通の`/api/auth/me`とログアウト処理を維持する。
 
 ## 前提と制約
 
 - Managed Mobileの固定Expoスターター、8081/3000、Manus管理リポジトリを維持する。
-- Managed Databaseは開発/本番で共有される。マイグレーションは追加的に行い、テスト時に破壊的な変更や実ユーザーデータ/デモfixtureの投入はしない。サンプルグループは読み取り専用でアプリ内表示する。
+- Managed Databaseは開発/本番で共有される。マイグレーションは追加的に行い、テスト時に破壊的な変更や実ユーザーデータ/デモfixtureの投入はしない。サンプルグループは読み取り専用でアプリ内表示する。メールアドレスは確認済みと見なさず、メール確認もメールでのパスワード再設定も提供しないという制約をログインUIに明記する。
 - 地図APIキー、DB資格情報、セッション署名情報はサーバー専用。端末/ブラウザーへ秘密鍵を含めない。
 - Expoの`EXPO_TOKEN`は環境同期でプロセスへ渡し、QR生成内容以外のログ、コード、画面、コミットに含めない。QR画像自体には接続用URLだけを含める。
 - 写真のバイト列は永続ストレージ、写真の所有/スポット関連はDBに置く。private/group mediaは認可済みの短期署名URLを介して表示する。

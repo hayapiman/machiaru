@@ -9,22 +9,39 @@ import { useAuth } from "@/hooks/use-auth";
 import { brand, typeface } from "@/lib/brand";
 import { trpc } from "@/lib/trpc";
 
+const fieldStyle = {
+  minHeight: 48,
+  borderWidth: 1,
+  borderColor: brand.line,
+  borderRadius: 14,
+  paddingHorizontal: 13,
+  backgroundColor: brand.paperLight,
+  color: brand.ink,
+  fontFamily: typeface.regular,
+};
+
 function ProfileContent() {
   const utils = trpc.useUtils();
   const auth = useAuth();
   const profileQuery = trpc.profile.me.useQuery(undefined, { staleTime: 15000 });
   const walksQuery = trpc.walks.list.useQuery(undefined, { staleTime: 30000 });
   const updateProfile = trpc.profile.update.useMutation();
+  const setEmailPassword = trpc.profile.setEmailPassword.useMutation();
   const uploadPhoto = trpc.photos.upload.useMutation();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [accountMessage, setAccountMessage] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const walks = walksQuery.data ?? [];
   const totalSteps = walks.reduce((total, walk) => total + walk.stepCount, 0);
   const totalDistance = walks.reduce((total, walk) => total + walk.distanceMeters, 0);
   const totalMinutes = Math.round(walks.reduce((total, walk) => total + walk.durationSeconds, 0) / 60);
 
   const displayNameValue = displayName ?? profileQuery.data?.displayName ?? auth.user?.name ?? "";
+  const emailLoginEnabled = profileQuery.data?.emailLoginEnabled ?? false;
 
   const saveProfile = async () => {
     if (!displayNameValue.trim()) {
@@ -56,16 +73,44 @@ function ProfileContent() {
       const rendered = await ImageManipulator.manipulate(asset.uri).resize({ width: 512 }).renderAsync();
       const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.8, base64: true });
       if (!saved.base64) throw new Error("画像を変換できませんでした。");
-      await uploadPhoto.mutateAsync({
-        base64: saved.base64,
-        mimeType: "image/jpeg",
-      });
+      await uploadPhoto.mutateAsync({ base64: saved.base64, mimeType: "image/jpeg" });
       await utils.profile.me.invalidate();
       setMessage("プロフィール写真を更新しました。");
     } catch {
       setMessage("プロフィール写真を保存できませんでした。");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveEmailPassword = async () => {
+    if (!profileQuery.data?.email) {
+      setAccountMessage("Manusアカウントにメールアドレスが登録されていません。");
+      return;
+    }
+    if (newPassword.length < 12 || newPassword.length > 128) {
+      setAccountMessage("パスワードは12〜128文字で入力してください。");
+      return;
+    }
+    if (emailLoginEnabled && !currentPassword) {
+      setAccountMessage("現在のパスワードを入力してください。");
+      return;
+    }
+    setAccountBusy(true);
+    setAccountMessage("");
+    try {
+      await setEmailPassword.mutateAsync({
+        newPassword,
+        ...(currentPassword ? { currentPassword } : {}),
+      });
+      await utils.profile.me.invalidate();
+      setCurrentPassword("");
+      setNewPassword("");
+      setAccountMessage(emailLoginEnabled ? "メールログインのパスワードを変更しました。" : "このManusアカウントにメールログインを設定しました。");
+    } catch (error) {
+      setAccountMessage(error instanceof Error ? error.message : "メールログインを設定できませんでした。");
+    } finally {
+      setAccountBusy(false);
     }
   };
 
@@ -84,9 +129,38 @@ function ProfileContent() {
       <Card style={{ gap: 11 }}>
         <SectionLabel>プロフィールを整える</SectionLabel>
         <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11 }}>グループの仲間には、この表示名とプロフィール写真が表示されます。</Text>
-        <TextInput value={displayNameValue} onChangeText={setDisplayName} maxLength={80} placeholder="表示名" placeholderTextColor="#A99A8C" style={{ minHeight: 48, borderWidth: 1, borderColor: brand.line, borderRadius: 14, paddingHorizontal: 13, backgroundColor: brand.paperLight, color: brand.ink, fontFamily: typeface.regular }} />
+        <TextInput value={displayNameValue} onChangeText={setDisplayName} maxLength={80} placeholder="表示名" placeholderTextColor="#A99A8C" style={fieldStyle} />
         {message ? <Text style={{ color: brand.sage, fontFamily: typeface.medium, fontSize: 12 }}>{message}</Text> : null}
         <AppButton label="プロフィールを保存" onPress={saveProfile} loading={busy} />
+      </Card>
+
+      <Card style={{ gap: 11 }}>
+        <SectionLabel>メールアドレス＋パスワード</SectionLabel>
+        <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, lineHeight: 17 }}>
+          Manusアカウントと同じプロフィールを使います。メールアドレス確認や、メールでのパスワード再設定はありません。
+        </Text>
+        <Text style={{ color: brand.ink, fontFamily: typeface.medium, fontSize: 12 }}>{profileQuery.data?.email ?? "Manusアカウントにメールアドレスがありません"}</Text>
+        {emailLoginEnabled ? (
+          <TextInput accessibilityLabel="現在のパスワード" value={currentPassword} onChangeText={setCurrentPassword} placeholder="現在のパスワード" placeholderTextColor="#A99A8C" secureTextEntry maxLength={128} style={fieldStyle} />
+        ) : null}
+        <TextInput
+          accessibilityLabel={emailLoginEnabled ? "新しいパスワード" : "パスワード"}
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder={emailLoginEnabled ? "新しいパスワード（12文字以上）" : "パスワードを設定（12文字以上）"}
+          placeholderTextColor="#A99A8C"
+          secureTextEntry
+          autoCapitalize="none"
+          maxLength={128}
+          style={fieldStyle}
+        />
+        {accountMessage ? <Text accessibilityRole="alert" style={{ color: brand.sage, fontFamily: typeface.medium, fontSize: 12 }}>{accountMessage}</Text> : null}
+        <AppButton
+          label={emailLoginEnabled ? "パスワードを変更" : "メールログインを設定"}
+          onPress={saveEmailPassword}
+          loading={accountBusy}
+          disabled={!profileQuery.data?.email || !newPassword}
+        />
       </Card>
 
       <SectionLabel>歩いてきた合計</SectionLabel>

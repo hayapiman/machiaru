@@ -11,12 +11,29 @@ export type User = {
   lastSignedIn: Date;
 };
 
+type AuthUserListener = (user: User | null) => void;
+const authUserListeners = new Set<AuthUserListener>();
+let webSessionToken: string | null = null;
+
+export function subscribeToUserInfo(listener: AuthUserListener): () => void {
+  authUserListeners.add(listener);
+  return () => authUserListeners.delete(listener);
+}
+
+function publishUserInfo(user: User | null): void {
+  for (const listener of authUserListeners) listener(user);
+}
+
 export async function getSessionToken(): Promise<string | null> {
   try {
-    // Web platform uses cookie-based auth, no manual token management needed
     if (Platform.OS === "web") {
-      console.log("[Auth] Web platform uses cookie-based auth, skipping token retrieval");
-      return null;
+      // Short-lived email sessions use per-tab storage as a Bearer fallback for embedded Preview cookies.
+      if (typeof window === "undefined") return webSessionToken;
+      try {
+        return window.sessionStorage.getItem(SESSION_TOKEN_KEY) ?? webSessionToken;
+      } catch {
+        return webSessionToken;
+      }
     }
 
     // Use SecureStore for native
@@ -31,9 +48,15 @@ export async function getSessionToken(): Promise<string | null> {
 
 export async function setSessionToken(token: string): Promise<void> {
   try {
-    // Web platform uses cookie-based auth, no manual token management needed
     if (Platform.OS === "web") {
-      console.log("[Auth] Web platform uses cookie-based auth, skipping token storage");
+      webSessionToken = token;
+      if (typeof window !== "undefined") {
+        try {
+          window.sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+        } catch {
+          // Keep the token in memory for this page when browser storage is unavailable.
+        }
+      }
       return;
     }
 
@@ -49,9 +72,15 @@ export async function setSessionToken(token: string): Promise<void> {
 
 export async function removeSessionToken(): Promise<void> {
   try {
-    // Web platform uses cookie-based auth, logout is handled by server clearing cookie
     if (Platform.OS === "web") {
-      console.log("[Auth] Web platform uses cookie-based auth, skipping token removal");
+      webSessionToken = null;
+      if (typeof window !== "undefined") {
+        try {
+          window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
+        } catch {
+          // The in-memory fallback above is cleared even when browser storage is unavailable.
+        }
+      }
       return;
     }
 
@@ -98,15 +127,15 @@ export async function setUserInfo(user: User): Promise<void> {
       // Use localStorage for web
       window.localStorage.setItem(USER_INFO_KEY, JSON.stringify(user));
       console.log("[Auth] User info stored in localStorage successfully");
-      return;
+    } else {
+      // Use SecureStore for native
+      await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(user));
+      console.log("[Auth] User info stored in SecureStore successfully");
     }
-
-    // Use SecureStore for native
-    await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(user));
-    console.log("[Auth] User info stored in SecureStore successfully");
   } catch {
     console.error("[Auth] Failed to set user info");
   }
+  publishUserInfo(user);
 }
 
 export async function clearUserInfo(): Promise<void> {
@@ -114,12 +143,12 @@ export async function clearUserInfo(): Promise<void> {
     if (Platform.OS === "web") {
       // Use localStorage for web
       window.localStorage.removeItem(USER_INFO_KEY);
-      return;
+    } else {
+      // Use SecureStore for native
+      await SecureStore.deleteItemAsync(USER_INFO_KEY);
     }
-
-    // Use SecureStore for native
-    await SecureStore.deleteItemAsync(USER_INFO_KEY);
   } catch {
     console.error("[Auth] Failed to clear user info");
   }
+  publishUserInfo(null);
 }

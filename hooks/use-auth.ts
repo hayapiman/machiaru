@@ -40,6 +40,7 @@ export function useAuth(options?: UseAuthOptions) {
         } else {
           console.log("[useAuth] Web: No authenticated user from API");
           setUser(null);
+          await Auth.removeSessionToken();
           await Auth.clearUserInfo();
         }
         return;
@@ -115,6 +116,8 @@ export function useAuth(options?: UseAuthOptions) {
       setLoading(false);
     }
   }, [autoFetch, fetchUser]);
+
+  useEffect(() => Auth.subscribeToUserInfo(setUser), []);
 
   return {
     user,
