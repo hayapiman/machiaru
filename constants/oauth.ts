@@ -111,9 +111,25 @@ export async function startOAuthLogin(): Promise<string | null> {
   const loginUrl = getLoginUrl();
 
   if (ReactNative.Platform.OS === "web") {
-    // On web, just redirect
     if (typeof window !== "undefined") {
-      window.location.href = loginUrl;
+      try {
+        // OAuth portals often refuse to render in a cross-site Preview iframe.
+        // Navigate the user-activated top-level context when the app is embedded.
+        const topWindow = window.top;
+        if (topWindow && topWindow !== window) {
+          topWindow.location.href = loginUrl;
+        } else {
+          window.location.href = loginUrl;
+        }
+      } catch {
+        // Some iframe sandboxes forbid top navigation; use a user-activated tab instead.
+        const authWindow = window.open(loginUrl, "_blank");
+        if (authWindow) {
+          authWindow.opener = null;
+        } else {
+          window.location.href = loginUrl;
+        }
+      }
     }
     return null;
   }

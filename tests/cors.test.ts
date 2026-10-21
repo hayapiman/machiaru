@@ -15,7 +15,7 @@ import {
 } from "../server/_core/cookies";
 import {
   LEGACY_COOKIE_NAME,
-  SESSION_COOKIE_SUFFIX,
+  SESSION_COOKIE_NAME,
 } from "../shared/const";
 
 let server: Server | null = null;
@@ -181,38 +181,48 @@ describe("Mobile API origin and cookie isolation", () => {
     expect(native.headers.get("access-control-allow-origin")).toBeNull();
   });
 
-  it("keeps session cookies host-only across different sandbox API hosts", () => {
-    for (const hostname of [
-      "3000-sandbox-a.preview.example.test",
-      "3000-sandbox-b.preview.example.test",
-    ]) {
-      const options = getSessionCookieOptions({
+  it("shares the Preview cookie only with the configured project parent domain", () => {
+    const previousPackager = process.env.EXPO_PACKAGER_PROXY_URL;
+    process.env.EXPO_PACKAGER_PROXY_URL = "https://8081-sandbox-a.preview.example.test";
+    try {
+      const request = {
         protocol: "https",
         headers: {},
-        hostname,
-      } as Request);
-      expect(options).not.toHaveProperty("domain");
+        hostname: "3000-sandbox-a.preview.example.test",
+      } as Request;
+      const options = getSessionCookieOptions(request);
       expect(options).toMatchObject({
+        domain: ".example.test",
         httpOnly: true,
         path: "/",
         sameSite: "none",
         secure: true,
       });
+
+      const otherProject = getSessionCookieOptions({
+        protocol: "https",
+        headers: {},
+        hostname: "3000-sandbox-b.preview.example.test",
+      } as Request);
+      expect(otherProject.domain).toBeUndefined();
+    } finally {
+      if (previousPackager === undefined) delete process.env.EXPO_PACKAGER_PROXY_URL;
+      else process.env.EXPO_PACKAGER_PROXY_URL = previousPackager;
     }
   });
 
-  it("ignores the old parent-domain cookie when the project cookie is also present", () => {
+  it("reads the Preview-standard session cookie and does not prefer legacy cookies", () => {
     const request = {
       protocol: "https",
       headers: {},
       hostname: "3000-sandbox.preview.example.test",
     } as Request;
     const currentName = getSessionCookieName(request);
-    const tossableParentName = `manus_session_${SESSION_COOKIE_SUFFIX}`;
-    expect(currentName.startsWith("__Host-")).toBe(true);
+    const tossableParentName = "manus_session_old";
+    expect(currentName).toBe(SESSION_COOKIE_NAME);
     expect(
       getSessionCookieName({ ...request, protocol: "http" } as Request),
-    ).toBe(`manus_local_session_${SESSION_COOKIE_SUFFIX}`);
+    ).toBe(SESSION_COOKIE_NAME);
     for (const cookie of [
       `${LEGACY_COOKIE_NAME}=legacy-token; ${currentName}=current-project-token`,
       `${tossableParentName}=attacker-token; ${currentName}=current-project-token`,

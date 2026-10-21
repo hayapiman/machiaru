@@ -14,6 +14,7 @@ export function LoginGate() {
       await startOAuthLogin();
     } catch {
       setMessage("ログイン画面を開けませんでした。少し待ってからもう一度お試しください。");
+    } finally {
       setLoading(false);
     }
   };

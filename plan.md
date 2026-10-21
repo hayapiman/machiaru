@@ -7,7 +7,7 @@
 ## 実装方式
 
 - **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。
-- **認証**: 提供済みManus OAuthとSecureStoreのセッションを使う。ログイン前は認証を偽装せず、アプリの説明とログイン導線を表示する。
+- **認証**: 提供済みManus OAuthを使う。Web Previewでは固定名`webdev_app_session`を読み書きし、`MANUS_JWT_SECRET`によるHS256検証、期限、有効な`MANUS_PROJECT_ID`との一致を確認する。HTTPS PreviewのCookieは`SameSite=None; Secure`にし、APIとPreviewで共有できるプロジェクト親ドメインを使う。埋め込みPreviewからのOAuth開始はトップレベル遷移を試し、認証後は`EXPO_WEB_PREVIEW_URL`へ戻す。ネイティブでは既存のDeep LinkとSecureStoreを使い、ログイン前の認証は偽装しない。
 - **地図**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。画像サイズは実際の表示枠と同じ縦横比にし、経路線・パン・スポット選択の座標変換を一致させる。地図の中心、ズーム、現在地再取得、ドラッグ、地図タップからのスポット登録を提供する。
 - **位置/健康指標**: Expo Locationで前景の歩行中位置を連続取得し、位置点、移動距離、現在/平均速度、経過時間を算出する。Expo SensorsのPedometerが使える実機では歩数を取得し、非対応環境では距離から推定した値として扱う。開始・一時停止・再開・終了を明示的に管理する。
 - **データと権限**: Drizzleのusers拡張、walkSessions、visitedSpots、spotPhotos、walkGroups、groupMembersを追加する。歩行とスポットは本人のみ、または選択グループへの共有として保存する。グループ向け一覧、詳細、地図、フィードは現メンバーに限定する。
