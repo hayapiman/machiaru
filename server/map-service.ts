@@ -44,7 +44,7 @@ export async function fetchStaticMap(input: {
   size: { width: number; height: number };
   routePoints: RoutePoint[];
   markers: MapCoordinate[];
-}): Promise<{ mimeType: string; base64: string }> {
+}): Promise<{ mimeType: string; base64: string; center: MapCoordinate; zoom: number; size: { width: number; height: number } }> {
   const apiBase = process.env.MANUS_API_URL;
   const apiKey = process.env.MANUS_API_KEY;
   if (!apiBase || !apiKey) {
@@ -54,7 +54,8 @@ export async function fetchStaticMap(input: {
   const url = new URL("/v1/maps/proxy/maps/api/staticmap", apiBase);
   url.searchParams.set("key", apiKey);
   url.searchParams.set("center", `${input.center.latitude},${input.center.longitude}`);
-  url.searchParams.set("zoom", String(Math.max(3, Math.min(19, input.zoom))));
+  const zoom = Math.max(3, Math.min(19, input.zoom));
+  url.searchParams.set("zoom", String(zoom));
   url.searchParams.set("size", `${input.size.width}x${input.size.height}`);
   url.searchParams.set("scale", "2");
   url.searchParams.set("maptype", "roadmap");
@@ -79,5 +80,5 @@ export async function fetchStaticMap(input: {
     throw new Error("Maps service did not return an image.");
   }
   const bytes = Buffer.from(await response.arrayBuffer());
-  return { mimeType, base64: bytes.toString("base64") };
+  return { mimeType, base64: bytes.toString("base64"), center: input.center, zoom, size: input.size };
 }

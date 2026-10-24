@@ -77,10 +77,12 @@ function MapHome({ userName }: { userName: string }) {
   const [spotSaving, setSpotSaving] = useState(false);
   const [spotNotice, setSpotNotice] = useState("");
   const [pendingWalk, setPendingWalk] = useState<PendingWalk | null>(null);
+  const [walkSaveOpen, setWalkSaveOpen] = useState(false);
   const [walkTitle, setWalkTitle] = useState("");
   const [walkVisibility, setWalkVisibility] = useState<"private" | "group">("private");
   const [walkGroupId, setWalkGroupId] = useState<number | null>(null);
   const [walkSaving, setWalkSaving] = useState(false);
+  const [walkFinishing, setWalkFinishing] = useState(false);
   const [notice, setNotice] = useState("");
   const lastRecenter = useRef<Coordinate | null>(null);
 
@@ -106,6 +108,17 @@ function MapHome({ userName }: { userName: string }) {
     : tracker.gpsAccuracyMeters !== null && tracker.gpsAccuracyMeters > 45
       ? "精度が低いため、この位置は距離に加算していません。空の開けた場所で再測位してください。"
       : "精度の低い位置や急な飛び値は距離に加算しません。";
+  const backgroundHint = tracker.backgroundTrackingStatus === "enabled"
+    ? "画面ロック中も位置を記録中です。アプリを強制終了すると停止します。"
+    : tracker.backgroundTrackingStatus === "requires-build"
+      ? "Expo Goでは画面ロック中の計測に非対応です。背景測位には開発ビルドが必要です。"
+      : tracker.backgroundTrackingStatus === "permission-denied"
+        ? "背景位置情報が未許可です。画面ロック中も記録するには端末設定で許可してください。"
+        : tracker.backgroundTrackingStatus === "unavailable"
+          ? "この実行環境では背景位置情報を利用できません。"
+          : tracker.backgroundTrackingStatus === "error"
+            ? "背景測位を開始できませんでした。現在はアプリ表示中のみ計測しています。"
+            : "背景測位の状態を確認しています。";
 
   useEffect(() => {
     const last = tracker.routeData.at(-1);
@@ -159,16 +172,25 @@ function MapHome({ userName }: { userName: string }) {
     await tracker.start();
   };
 
-  const openWalkSave = () => {
-    const result = tracker.finish();
-    if (!result) return;
-    const lastPoint = result.routeData.at(-1);
-    if (lastPoint) setCenter({ latitude: lastPoint.latitude, longitude: lastPoint.longitude });
-    setPendingWalk(result);
-    setWalkTitle("");
-    setWalkVisibility("private");
-    setWalkGroupId(null);
-    setNotice("");
+  const openWalkSave = async () => {
+    if (walkFinishing) return;
+    setWalkFinishing(true);
+    try {
+      const result = await tracker.finish();
+      if (!result) return;
+      const lastPoint = result.routeData.at(-1);
+      if (lastPoint) setCenter({ latitude: lastPoint.latitude, longitude: lastPoint.longitude });
+      setPendingWalk(result);
+      setWalkTitle("");
+      setWalkVisibility("private");
+      setWalkGroupId(null);
+      setWalkSaveOpen(true);
+      setNotice("");
+    } catch {
+      setNotice("位置情報の整理に失敗しました。少し待ってから終了をもう一度お試しください。");
+    } finally {
+      setWalkFinishing(false);
+    }
   };
 
   const saveWalk = async () => {
@@ -191,7 +213,9 @@ function MapHome({ userName }: { userName: string }) {
         routeData: pendingWalk.routeData,
       });
       await trpcUtils.walks.list.invalidate();
+      await tracker.clearSavedDraft().catch(() => undefined);
       setPendingWalk(null);
+      setWalkSaveOpen(false);
       setNotice("今日の歩みを記録しました。");
     } catch {
       setNotice("歩行記録を保存できませんでした。通信を確認してください。");
@@ -362,6 +386,8 @@ function MapHome({ userName }: { userName: string }) {
           <Metric label="速度" value={formatPace(tracker.currentSpeedMps)} unit="km/h" />
         </View>
         {tracker.runState !== "idle" ? <Text style={{ color: brand.muted, fontFamily: typeface.medium, fontSize: 11 }}>平均速度　{averageSpeedKmh} km/h</Text> : null}
+        {tracker.restoredDraft ? <Text style={{ color: brand.terracottaDark, fontFamily: typeface.medium, fontSize: 11, lineHeight: 17 }}>前回の未保存の歩行を復元しました。ルートを確認し、再開するか終了して保存してください。</Text> : null}
+        {tracker.runState === "tracking" ? <Text style={{ color: tracker.backgroundTrackingStatus === "enabled" ? brand.sage : brand.muted, fontFamily: typeface.regular, fontSize: 11, lineHeight: 17 }}>{backgroundHint}</Text> : null}
         {tracker.runState !== "idle" ? (
           <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <Tag tone={tracker.estimatedSteps ? "yellow" : "green"}>{tracker.estimatedSteps ? "歩数は推定" : "端末歩数計"}</Tag>
@@ -370,12 +396,13 @@ function MapHome({ userName }: { userName: string }) {
         ) : null}
         {tracker.locationError ? <Text style={{ color: brand.terracottaDark, fontFamily: typeface.regular, fontSize: 12 }}>{tracker.locationError}</Text> : null}
         {notice ? <Text style={{ color: brand.sage, fontFamily: typeface.medium, fontSize: 12 }}>{notice}</Text> : null}
+        {pendingWalk && !walkSaveOpen ? <AppButton label="未保存の歩行を保存する" onPress={() => setWalkSaveOpen(true)} variant="soft" /> : null}
         {tracker.runState === "idle" ? (
-          <AppButton label="歩行を記録する" onPress={startOrResume} />
+          <AppButton label="歩行を記録する" onPress={startOrResume} disabled={Boolean(pendingWalk) || tracker.isRestoringDraft} />
         ) : (
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}><AppButton label={tracker.runState === "paused" ? "記録を再開" : "一時停止"} onPress={tracker.runState === "paused" ? startOrResume : tracker.pause} variant="soft" /></View>
-            <View style={{ flex: 1 }}><AppButton label="終了して保存" onPress={openWalkSave} /></View>
+            <View style={{ flex: 1 }}><AppButton label="終了して保存" onPress={openWalkSave} loading={walkFinishing} /></View>
           </View>
         )}
       </Card>
@@ -444,7 +471,7 @@ function MapHome({ userName }: { userName: string }) {
         </View>
       </Modal>
 
-      <Modal transparent visible={Boolean(pendingWalk)} animationType="slide" onRequestClose={() => setPendingWalk(null)}>
+      <Modal transparent visible={Boolean(pendingWalk) && walkSaveOpen} animationType="slide" onRequestClose={() => setWalkSaveOpen(false)}>
         <View style={modalBackdrop}>
           <View style={sheetStyle}>
             <View style={sheetHandle} />
@@ -464,7 +491,7 @@ function MapHome({ userName }: { userName: string }) {
             </View>
             {notice ? <Text style={{ color: brand.terracottaDark, fontFamily: typeface.regular, fontSize: 11 }}>{notice}</Text> : null}
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <View style={{ flex: 1 }}><AppButton label="保存せず閉じる" variant="outline" onPress={() => { setPendingWalk(null); setNotice("この歩行は未保存です。保存する場合はあらためて記録してください。"); }} /></View>
+              <View style={{ flex: 1 }}><AppButton label="あとで保存" variant="outline" onPress={() => setWalkSaveOpen(false)} /></View>
               <View style={{ flex: 1 }}><AppButton label="記録を保存" onPress={saveWalk} loading={walkSaving} /></View>
             </View>
           </View>
@@ -481,7 +508,16 @@ const sheetHandle = { width: 40, height: 4, borderRadius: 5, backgroundColor: br
 
 export default function HomeScreen() {
   const { user, loading } = useAuth();
+  const { setDraftOwnerId, isRestoringDraft, draftOwnerId } = useWalkTracker();
+  const ownerId = user ? String(user.id) : null;
+  useEffect(() => {
+    void setDraftOwnerId(ownerId).catch(() => undefined);
+  }, [ownerId, setDraftOwnerId]);
+
   if (loading) return <Page><ActivityIndicator color={brand.terracotta} /><Text style={{ textAlign: "center", color: brand.muted, fontFamily: typeface.regular }}>地図を準備しています</Text></Page>;
   if (!user) return <LoginGate />;
+  if (isRestoringDraft || draftOwnerId !== ownerId) {
+    return <Page><ActivityIndicator color={brand.terracotta} /><Text style={{ textAlign: "center", color: brand.muted, fontFamily: typeface.regular }}>前回の歩行記録を確認しています</Text></Page>;
+  }
   return <MapHome userName={user.name || ""} />;
 }

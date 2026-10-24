@@ -106,9 +106,18 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-asset",
-    "expo-router",
+    "expo-image-picker",
     ["expo-image-picker", { photosPermission: "訪問した場所の記録に写真へのアクセスを許可します。" }],
-    ["expo-location", { locationWhenInUsePermission: "歩行ルートを地図に記録し、現在地を表示するため、使用中の位置情報にアクセスします。" }],
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission: "歩行ルートを地図に記録し、現在地を表示するため、使用中の位置情報にアクセスします。",
+        locationAlwaysAndWhenInUsePermission: "歩行中に画面をロックしている間もルートを記録するため、位置情報を利用します。位置情報の記録は歩行記録中のみ行います。",
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+      },
+    ],
     ["expo-sensors", { motionPermission: "歩数を記録するため、モーションデータへのアクセスを許可します。" }],
     [
       "expo-audio",

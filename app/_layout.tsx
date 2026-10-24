@@ -12,8 +12,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
+import "@/lib/background-walk";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { WalkTrackerProvider } from "@/hooks/use-walk-tracker";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -78,12 +80,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="oauth/callback" />
-            <Stack.Screen name="walk/[id]" />
-            <Stack.Screen name="walk/map" />
-          </Stack>
+          <WalkTrackerProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="oauth/callback" />
+              <Stack.Screen name="walk/[id]" />
+              <Stack.Screen name="walk/map" />
+            </Stack>
+          </WalkTrackerProvider>
           <StatusBar style="dark" />
         </QueryClientProvider>
       </trpc.Provider>
