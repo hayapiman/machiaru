@@ -28,10 +28,10 @@ export default function TabLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "地図", tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} /> }} />
-      <Tabs.Screen name="records" options={{ title: "記録", tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} /> }} />
-      <Tabs.Screen name="groups" options={{ title: "みんな", tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
-      <Tabs.Screen name="profile" options={{ title: "わたし", tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="index" options={{ title: "地図", tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={typeof color === "string" ? color : brand.terracotta} /> }} />
+      <Tabs.Screen name="records" options={{ title: "記録", tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={typeof color === "string" ? color : brand.terracotta} /> }} />
+      <Tabs.Screen name="groups" options={{ title: "みんな", tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={typeof color === "string" ? color : brand.terracotta} /> }} />
+      <Tabs.Screen name="profile" options={{ title: "わたし", tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={typeof color === "string" ? color : brand.terracotta} /> }} />
     </Tabs>
   );
 }

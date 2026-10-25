@@ -10,12 +10,12 @@
 - **認証**: 既存Manus OAuthを維持し、メールアドレス＋パスワードでの新規登録/ログインと、認証済みManusユーザーが同一アカウントへメールログインを紐付ける設定を加える。メール資格情報は専用テーブルに保存し、Node `scrypt`のsalt付きハッシュのみを保持する。パスワードは12〜128文字とし、失敗回数を制限する。メール認証セッションは30日で期限切れにする。ユーザー了承の制約としてメール確認、メール送信、メールでのパスワード再設定は提供しない。Web Previewでは固定名`webdev_app_session`を読み書きし、メール認証ではHttpOnly Cookieに加えてタブ単位の短期Bearer tokenを使い、第三者Cookieが遮断される埋め込みでもAPIアクセスを維持する。`MANUS_JWT_SECRET`によるHS256検証、期限、有効な`MANUS_PROJECT_ID`との一致を確認する。HTTPS PreviewのCookieは`SameSite=None; Secure`にし、APIとPreviewで共有できるプロジェクト親ドメインを使う。埋め込みPreviewからのOAuth開始はトップレベル遷移を試し、認証後は`EXPO_WEB_PREVIEW_URL`へ戻す。ネイティブではDeep LinkとSecureStoreを使い、ログイン前の認証は偽装しない。
 - **地図**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。画面枠に合った地図画像を保持して新しい表示を読み込む間も空白にせず、Reanimatedで地図画像・軌跡・現在地を同時に即時移動/拡縮する。パン/ピンチは画像取得中も受け付け、操作が落ち着いて160ms後に最新viewportだけを要求する。SVG軌跡は描画専用にメモ化し、表示点数を上限化して長距離記録の再描画負荷を下げるが、保存するGPS点は間引かない。画像要求は同じviewportで再利用できるようQuery cacheする。現在地は高コントラストの青い点と精度の円で示し、48論理ピクセル以上のズーム/現在地コントロールを設ける。保存済み歩行のルートは独立した大きな地図ページで拡大表示する。
 - **位置/健康指標**: Expo Locationの`BestForNavigation`で前景の歩行中位置を取得する。水平精度の低いGPS点を距離計算から除外し、精度に応じた移動しきい値と歩行者向け速度上限で飛び値・静止時の揺れを抑える。現在速度は直近の有効区間を平滑化し、平均速度は一時停止を除いた計測時間で算出する。Expo SensorsのPedometer歩数は一時停止/再開を通して累積し、非対応環境では距離からの推定値と明示する。GPS水平精度、歩数の実測/推定区分、センサー不調時の説明を画面に表示する。
-- **バックグラウンド位置記録**: `expo-task-manager`のmodule-scope Location taskをroot layoutから登録し、歩行中にAlways/background権限が許可された場合だけ`startLocationUpdatesAsync`を使う。Androidではforeground-service通知を表示する。画面ロック/他アプリ使用中の位置イベントはAsyncStorageへ一時保留し、復帰時に既存のGPS精度・飛び値フィルターを通してルートへ反映する。バックグラウンドで端末Pedometerの継続を保証できない場合は距離由来の推定歩数へ切り替えて明示する。SDK 57のExpo Goでは背景位置測位が動かないためdevelopment buildを使う。ユーザーがアプリを終了/強制停止した後の継続はOS仕様上保証せず、画面内で制約を案内する。
+- **バックグラウンド位置記録**: `expo-task-manager`のmodule-scope Location taskをroot layoutから登録し、歩行中にAlways/background権限が許可された場合だけ`startLocationUpdatesAsync`を使う。Androidではforeground-service通知を表示する。画面ロック/他アプリ使用中の位置イベントはAsyncStorageへ一時保留し、復帰時に既存のGPS精度・飛び値フィルターを通してルートへ反映する。バックグラウンドで端末Pedometerの継続を保証できない場合は距離由来の推定歩数へ切り替えて明示する。SDK 58のExpo Goでは背景位置測位が動かないためdevelopment buildを使う。ユーザーがアプリを終了/強制停止した後の継続はOS仕様上保証せず、画面内で制約を案内する。
 - **データと権限**: Drizzleのusers、emailCredentials、walkSessions、visitedSpots、spotPhotos、walkGroups、groupMembersを使う。パスワードハッシュ以外の秘密情報は保存しない。歩行とスポットは本人のみ、または選択グループへの共有として保存する。グループ向け一覧、詳細、地図、フィードは現メンバーに限定する。
 - **画像**: Expo Image Pickerで最大5枚を選択し、縮小JPEGにして保護されたtRPCアップロードからManus Storageへ送る。DBにはStorage参照と所有者/スポットの関連を内部保存し、画面には画像IDだけを返す。Web/ネイティブとも、署名URL発行時に本人またはグループ参加を確認し、安定URL/Storageキーをクライアントへ渡さない。
 - **画面構成**: マップ/記録、歩行履歴、グループ、プロフィールの4タブ。マップから記録開始、スポット追加、保存確認を行い、歩行履歴/詳細から独立した大きなルート地図を開く。マップには48論理ピクセル以上の指操作コントロールと現在地マーカーを置き、計測中は背景測位の可否を明示する。履歴から活動ルートと指標を見返し、最近のスポット一覧から詳細シートを開いてメモ、日時、全写真を閲覧する。グループ画面には実データの共有フィード/地図と、サンプルと明記したデモフィードを分けて表示する。
 - **デモ共有**: グループ画面で友人3名、複数の歩行ルート、訪問スポット写真を含む読み取り専用のローカルfixtureを見られるようにする。サンプル表示にはデモラベルを付け、実ユーザーや実招待コードを装わず、Managed Databaseへ書き込まない。
-- **Expo Go/実機接続**: 固定のMetro/Web Preview 8081とAPI 3000を維持する。保存済み`EXPO_TOKEN`は`webdev.config`の環境同期を経てExpoプロセス内だけで使い、ソース、ログ、画面、コミットには出さない。接続URLからQRを生成/表示し、実機での権限確認、歩行計測、共有の試し方を案内する。前景の位置・歩数・写真はExpo Go上の実機で確認できるが、背景位置測位はSDK 57ではExpo Go対象外のため、background permissionとiOS/Android native configurationを含むdevelopment buildを別途用意する。
+- **Expo Go/実機接続**: 固定のMetro/Web Preview 8081とAPI 3000を維持する。保存済み`EXPO_TOKEN`は`webdev.config`の環境同期を経てExpoプロセス内だけで使い、ソース、ログ、画面、コミットには出さない。接続URLからQRを生成/表示し、実機での権限確認、歩行計測、共有の試し方を案内する。前景の位置・歩数・写真はExpo Go上の実機で確認できるが、背景位置測位はSDK 58ではExpo Go対象外のため、background permissionとiOS/Android native configurationを含むdevelopment buildを別途用意する。
 
 ## デザイン — 旅の手帖コラージュ
 
@@ -88,6 +88,6 @@ assets/demo/               ローカルのデモ共有フィード用写真
 - 写真のバイト列は永続ストレージ、写真の所有/スポット関連はDBに置く。private/group mediaは認可済みの短期署名URLを介して表示する。
 - GPSは利用者が歩行記録を開始した間だけ取得する。背景権限が許可されている場合はアプリが画面ロック/背景中の位置イベントを端末内へ一時保留し、アプリ復帰時に既存のGPS品質フィルターを通してルートへ反映する。常時位置監視は行わない。
 - 自動公開は有効化しない。アプリのチェックポイント作成と一般公開は別の操作として扱う。
-- Expo SDK 57の背景位置測位はExpo Go非対応で、development buildが必要。Expo Locationの背景モード・Android foreground-service権限・iOS Always/Android foreground+background permissionsを設定する。
+- Expo SDK 58の背景位置測位はExpo Go非対応で、development buildが必要。Expo Locationの背景モード・Android foreground-service権限・iOS Always/Android foreground+background permissionsを設定する。
 - OSがユーザーによるアプリ終了/強制停止を検知すると背景位置更新は停止する。Androidは終了後に位置イベントで自動再起動しない。背景/画面ロック中の計測を目標にし、強制終了後まで継続すると説明しない。
 - 背景でPedometerの継続を保証できないときは距離由来の推定歩数に切り替えて表示する。位置精度と歩幅には個体差があり、医療用途の正確性は保証しない。
