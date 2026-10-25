@@ -15,7 +15,7 @@
 - **画像**: Expo Image Pickerで最大5枚を選択し、縮小JPEGにして保護されたtRPCアップロードからManus Storageへ送る。DBにはStorage参照と所有者/スポットの関連を内部保存し、画面には画像IDだけを返す。Web/ネイティブとも、署名URL発行時に本人またはグループ参加を確認し、安定URL/Storageキーをクライアントへ渡さない。
 - **画面構成**: マップ/記録、歩行履歴、グループ、プロフィールの4タブ。マップから記録開始、スポット追加、保存確認を行い、歩行履歴/詳細から独立した大きなルート地図を開く。マップには48論理ピクセル以上の指操作コントロールと現在地マーカーを置き、計測中は背景測位の可否を明示する。履歴から活動ルートと指標を見返し、最近のスポット一覧から詳細シートを開いてメモ、日時、全写真を閲覧する。グループ画面には実データの共有フィード/地図と、サンプルと明記したデモフィードを分けて表示する。
 - **デモ共有**: グループ画面で友人3名、複数の歩行ルート、訪問スポット写真を含む読み取り専用のローカルfixtureを見られるようにする。サンプル表示にはデモラベルを付け、実ユーザーや実招待コードを装わず、Managed Databaseへ書き込まない。
-- **Expo Go/実機接続**: 固定のMetro/Web Preview 8081とAPI 3000を維持する。保存済み`EXPO_TOKEN`は`webdev.config`の環境同期を経てExpoプロセス内だけで使い、ソース、ログ、画面、コミットには出さない。接続URLからQRを生成/表示し、実機での権限確認、歩行計測、共有の試し方を案内する。前景の位置・歩数・写真はExpo Go上の実機で確認できるが、背景位置測位はSDK 58ではExpo Go対象外のため、background permissionとiOS/Android native configurationを含むdevelopment buildを別途用意する。
+- **Expo Go/実機接続**: 固定のMetro/Web Preview 8081とAPI 3000を維持する。保存済み`EXPO_TOKEN`は`webdev.config`の環境同期を経てExpoプロセス内だけで使い、ソース、ログ、画面、コミットには出さない。Expo SDK 58のExpo Go用QRと、`expo-dev-client`を含むEAS internal development buildを分けて案内する。`dev:metro:go`と`dev:metro:dev-client`で接続先を明示し、前景機能はExpo Go、背景測位は実機development buildで確認する。背景位置テスト手順を`docs/background-location-device-test.ja.md`に保つ。iOS実機distributionにはApple Developer署名と登録済み端末が必要で、EAS project linking/cloud buildは別操作として扱う。
 
 ## デザイン — 旅の手帖コラージュ
 
@@ -56,6 +56,8 @@ lib/
   trpc.ts                 既存tRPCクライアント
   demo-group-fixtures.ts  DB書き込みのない友人/ルート/スポットfixture
   background-walk.ts     TaskManager背景Location taskと端末内位置キュー
+eas.json                    internal development build profile
+docs/background-location-device-test.ja.md 実機の背景位置テスト手順とOS制約
 server/
   routers.ts              認証済みCRUD、プライバシー、写真権限と共有API
   db.ts                   既存Manus OAuthユーザーとDrizzle接続
@@ -82,6 +84,7 @@ assets/demo/               ローカルのデモ共有フィード用写真
 ## 前提と制約
 
 - Managed Mobileの固定Expoスターター、8081/3000、Manus管理リポジトリを維持する。
+- EAS development profileは内部配布用にする。EAS cloud buildはbuild quotaを使う。iPhone実機向けiOS internal buildにはApple Developer Program署名と端末登録が必要で、初回のEAS project linking/buildはユーザーの明示確認前に起動しない。
 - Managed Databaseは開発/本番で共有される。マイグレーションは追加的に行い、テスト時に破壊的な変更や実ユーザーデータ/デモfixtureの投入はしない。サンプルグループは読み取り専用でアプリ内表示する。メールアドレスは確認済みと見なさず、メール確認もメールでのパスワード再設定も提供しないという制約をログインUIに明記する。
 - 地図APIキー、DB資格情報、セッション署名情報はサーバー専用。端末/ブラウザーへ秘密鍵を含めない。
 - Expoの`EXPO_TOKEN`は環境同期でプロセスへ渡し、QR生成内容以外のログ、コード、画面、コミットに含めない。QR画像自体には接続用URLだけを含める。

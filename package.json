@@ -7,6 +7,8 @@
     "dev": "concurrently -k \"pnpm dev:server\" \"pnpm dev:metro\"",
     "dev:server": "cross-env PORT=3000 NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:metro": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 EXPO_PORT=8081 npx expo start --web --port 8081",
+    "dev:metro:dev-client": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 EXPO_PORT=8081 npx expo start --dev-client --web --port 8081",
+    "dev:metro:go": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 EXPO_PORT=8081 npx expo start --go --web --port 8081",
     "build": "esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
@@ -38,6 +40,7 @@
     "expo-audio": "~58.0.10",
     "expo-build-properties": "~58.0.11",
     "expo-constants": "~58.0.13",
+    "expo-dev-client": "~58.0.15",
     "expo-font": "~58.0.10",
     "expo-haptics": "~58.0.7",
     "expo-image": "~58.0.17",
@@ -96,11 +99,5 @@
     "typescript": "~6.0.3",
     "vitest": "^2.1.9"
   },
-  "packageManager": "pnpm@9.12.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "unrs-resolver"
-    ]
-  }
+  "packageManager": "pnpm@9.12.0"
 }
