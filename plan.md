@@ -1,35 +1,34 @@
-# まちある — 実装計画
+# まちある — App Store 公開準備 実装計画
 
 ## プロダクト
 
-「まちある」は、GPSによる街歩きの軌跡と健康指標を記録し、訪問スポットに写真やメモを残し、個人または友人グループで共有する縦持ちモバイルアプリ。Blueprintで承認された範囲を実装し、歩行中に片手で操作できることを優先する。
+「まちある」は、GPSによる街歩きの軌跡と健康指標を記録し、訪問スポットに写真やメモを残し、個人または友人グループで共有する縦持ちモバイルアプリ。既存の旅の手帖コラージュのデザインを保ち、App Store公開前に必要なアカウント削除、データ処理説明と問い合わせ導線、グループ内コンテンツ安全策、メール専用ログイン、本番配布設定を整える。
 
 ## 実装方式
 
-- **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。
-- **認証**: 既存Manus OAuthを維持し、メールアドレス＋パスワードでの新規登録/ログインと、認証済みManusユーザーが同一アカウントへメールログインを紐付ける設定を加える。メール資格情報は専用テーブルに保存し、Node `scrypt`のsalt付きハッシュのみを保持する。パスワードは12〜128文字とし、失敗回数を制限する。メール認証セッションは30日で期限切れにする。ユーザー了承の制約としてメール確認、メール送信、メールでのパスワード再設定は提供しない。Web Previewでは固定名`webdev_app_session`を読み書きし、メール認証ではHttpOnly Cookieに加えてタブ単位の短期Bearer tokenを使い、第三者Cookieが遮断される埋め込みでもAPIアクセスを維持する。`MANUS_JWT_SECRET`によるHS256検証、期限、有効な`MANUS_PROJECT_ID`との一致を確認する。HTTPS PreviewのCookieは`SameSite=None; Secure`にし、APIとPreviewで共有できるプロジェクト親ドメインを使う。埋め込みPreviewからのOAuth開始はトップレベル遷移を試し、認証後は`EXPO_WEB_PREVIEW_URL`へ戻す。ネイティブではDeep LinkとSecureStoreを使い、ログイン前の認証は偽装しない。
-- **地図**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。画面枠に合った地図画像を保持して新しい表示を読み込む間も空白にせず、Reanimatedで地図画像・軌跡・現在地を同時に即時移動/拡縮する。パン/ピンチは画像取得中も受け付け、操作が落ち着いて160ms後に最新viewportだけを要求する。SVG軌跡は描画専用にメモ化し、表示点数を上限化して長距離記録の再描画負荷を下げるが、保存するGPS点は間引かない。画像要求は同じviewportで再利用できるようQuery cacheする。現在地は高コントラストの青い点と精度の円で示し、48論理ピクセル以上のズーム/現在地コントロールを設ける。保存済み歩行のルートは独立した大きな地図ページで拡大表示する。
-- **位置/健康指標**: Expo Locationの`BestForNavigation`で前景の歩行中位置を取得する。水平精度の低いGPS点を距離計算から除外し、精度に応じた移動しきい値と歩行者向け速度上限で飛び値・静止時の揺れを抑える。現在速度は直近の有効区間を平滑化し、平均速度は一時停止を除いた計測時間で算出する。Expo SensorsのPedometer歩数は一時停止/再開を通して累積し、非対応環境では距離からの推定値と明示する。GPS水平精度、歩数の実測/推定区分、センサー不調時の説明を画面に表示する。
-- **バックグラウンド位置記録**: `expo-task-manager`のmodule-scope Location taskをroot layoutから登録し、歩行中にAlways/background権限が許可された場合だけ`startLocationUpdatesAsync`を使う。Androidではforeground-service通知を表示する。画面ロック/他アプリ使用中の位置イベントはAsyncStorageへ一時保留し、復帰時に既存のGPS精度・飛び値フィルターを通してルートへ反映する。バックグラウンドで端末Pedometerの継続を保証できない場合は距離由来の推定歩数へ切り替えて明示する。SDK 58のExpo Goでは背景位置測位が動かないためdevelopment buildを使う。ユーザーがアプリを終了/強制停止した後の継続はOS仕様上保証せず、画面内で制約を案内する。
-- **データと権限**: Drizzleのusers、emailCredentials、walkSessions、visitedSpots、spotPhotos、walkGroups、groupMembersを使う。パスワードハッシュ以外の秘密情報は保存しない。歩行とスポットは本人のみ、または選択グループへの共有として保存する。グループ向け一覧、詳細、地図、フィードは現メンバーに限定する。
-- **画像**: Expo Image Pickerで最大5枚を選択し、縮小JPEGにして保護されたtRPCアップロードからManus Storageへ送る。DBにはStorage参照と所有者/スポットの関連を内部保存し、画面には画像IDだけを返す。Web/ネイティブとも、署名URL発行時に本人またはグループ参加を確認し、安定URL/Storageキーをクライアントへ渡さない。
-- **画面構成**: マップ/記録、歩行履歴、グループ、プロフィールの4タブ。マップから記録開始、スポット追加、保存確認を行い、歩行履歴/詳細から独立した大きなルート地図を開く。マップには48論理ピクセル以上の指操作コントロールと現在地マーカーを置き、計測中は背景測位の可否を明示する。履歴から活動ルートと指標を見返し、最近のスポット一覧から詳細シートを開いてメモ、日時、全写真を閲覧する。グループ画面には実データの共有フィード/地図と、サンプルと明記したデモフィードを分けて表示する。
-- **デモ共有**: グループ画面で友人3名、複数の歩行ルート、訪問スポット写真を含む読み取り専用のローカルfixtureを見られるようにする。サンプル表示にはデモラベルを付け、実ユーザーや実招待コードを装わず、Managed Databaseへ書き込まない。
-- **Expo Go/実機接続**: 固定のMetro/Web Preview 8081とAPI 3000を維持する。保存済み`EXPO_TOKEN`は`webdev.config`の環境同期を経てExpoプロセス内だけで使い、ソース、ログ、画面、コミットには出さない。Expo SDK 58のExpo Go用QRと、`expo-dev-client`を含むEAS internal development buildを分けて案内する。`dev:metro:go`と`dev:metro:dev-client`で接続先を明示し、前景機能はExpo Go、背景測位は実機development buildで確認する。背景位置テスト手順を`docs/background-location-device-test.ja.md`に保つ。iOS実機distributionにはApple Developer署名と登録済み端末が必要で、EAS project linking/cloud buildは別操作として扱う。
+- **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。固定ポート8081/3000やManus管理リポジトリを変更しない。
+- **認証**: アプリから選べるログイン方式をメールアドレス＋パスワードだけにする。登録・ログインは既存のscryptパスワードハッシュを使い、メール確認とメールでのパスワード再設定は提供しない。Manus OAuthのログインUI、コールバック画面、ログイン用APIルート、クライアント設定値は削除する。既存の有効なセッションとユーザーIDは壊さず、ログイン中の旧利用者がプロフィールからメール＋パスワードを設定して移行できるようにする。既存利用者が設定前にログアウト／アプリ削除した場合の復旧手段がない制約をログイン画面で案内する。Webでは`webdev_app_session` HttpOnly Cookieとタブ単位のBearer fallback、ネイティブではSecureStoreのBearer tokenを使う。HTTPS Previewでは`SameSite=None; Secure`を維持する。プラットフォーム署名secretはセッション検証用にサーバーだけで用い、ユーザー向けログイン方式とは混同しない。
+- **アカウント削除**: プロフィールに削除導線と明示確認を追加し、サーバー側でメール資格情報、プロフィール、歩行ルート/指標、スポット/ノート、グループ所属を削除する。所有グループは最古の残存メンバーへ所有権を移し、残存メンバーがいない場合だけグループを削除する。利用者がアップロードした写真、プロフィール画像、プロフィール写真の差替で孤立する旧Storage keyを削除待ち台帳へ記録し、通常APIから即時に参照・取得できなくする。削除時には内部session IDをcookie signing secretでHMAC化したtombstoneを最大1年間持ち、別端末の有効な旧sessionからユーザー行が再生成されるのを防ぎ、期限切れ記録は認証要求処理で整理する。Managed Storageのランタイム契約には物理削除APIがないため、実ファイルはプロジェクト運営者がStorage管理面で削除するまで「削除処理中」とし、完了済みと誤表示しない。管理者は物理削除の後でのみ受付を完了にできる。
+- **プライバシーと問い合わせ**: ログイン前から見られる日本語のプライバシー説明と問い合わせページをアプリ内に設け、公開HTTPS endpoint `GET /api/legal/privacy` と `GET /api/legal/support` も用意する。メールアドレス、プロフィール、歩行の精密位置/日時/距離/速度/歩数、スポット名/ノート/位置/写真、グループ共有範囲、保存先、共有相手、保持・削除方法、旧session再生成防止に使うHMAC fingerprintの期限付き保持を実動作に合わせて説明する。運営者名と公開可能な問い合わせ先メール、本番API URLは未確定のため公開値を仮定しない。未設定の公開Legal endpointは503を返し、App Store ConnectにはPreviewや一時URLを登録しない。
+- **グループ内コンテンツ安全策**: グループ共有の歩行記録とスポット（添付写真を含む）は`pending`で保存し、グループ作成者の確認後にのみフィードへ表示する。作成者は承認または却下でき、却下された内容は共有されない。メンバーは共有記録/スポットや利用者を理由付きで通報でき、グループ作成者は報告を確認し、投稿を却下し、必要ならメンバーを除外できる。利用者のブロックを永続化し、ブロック関係にある利用者同士の共有内容を一覧・詳細・投稿写真/プロフィール写真の署名URL発行から相互に除外する。タイトルやノートの入力はサーバー側でも検証し、コミュニティルールと問い合わせ先をアプリ内で示す。
+- **地図・歩行計測**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。Reanimatedで地図画像・軌跡・現在地を同時に即時移動/拡縮し、ドラッグ/ピンチは画像取得中も受け付け、操作が落ち着いて160ms後に最新viewportだけを要求する。GPS品質フィルター、速度平滑化、実測/推定歩数の区別、詳細地図ページを維持する。
+- **バックグラウンド位置記録**: `expo-task-manager`のmodule-scope Location taskをroot layoutから登録し、歩行中にAlways/background権限が許可された場合だけ位置更新を使う。Androidではforeground-service通知を表示する。画面ロック/他アプリ使用中の位置イベントは端末内へ一時保留し、復帰時に既存のGPS品質フィルターを通す。OSがアプリを終了/強制停止した後の計測は保証しない。実機確認は物理端末の利用者が日本語手順書に沿って行う。
+- **本番配布設定**: `eas.json`にストア配布用production profileを設け、iOS build番号を自動増分する。EAS/Managed MobileのDashboard buildを使い、Sandboxからネイティブrelease buildを起動しない。本番API、運営者名、問い合わせ先、安定したHTTPSのprivacy/support URLが不足する場合は`app.config.ts`がproduction buildを拒否する。URL guardはlocalhost、IP、Previewと既知の一時トンネルを拒否するが、運営者は公開URLが実際に安定して200を返すことを別途確認する。現在のPreviewホストを固定値にしない。Apple App Store Connectのアプリレコード／App IDがない間はSubmit設定に架空のIDを入れない。サーバー秘密鍵をExpo公開extraへ含めない。
+- **不要な権限**: アプリで録音/動画再生を使っていないことをソース検索で確認し、未使用のaudio/video依存、マイク・バックグラウンド再生/PiP権限を外す。写真、位置、歩数に必要な目的文は日本語で正確に保つ。
 
 ## デザイン — 旅の手帖コラージュ
 
 - **デザインムーブメント**: 紙地図、切符、写真シールを重ねた旅の手帖のコラージュ。地図と歩行計測は読みやすく、思い出の記録は温かく見せる。
 - **コア原則**: 1) 歩行中の数値は一目で読める、2) 記録とスポット保存は片手で完結、3) 写真を街歩きの記憶として扱う、4) 個人/グループの公開範囲を操作時に明確にする。
 - **色彩哲学**: 生成りの紙色を広い面に使い、テラコッタを操作とルートの主役色、マスタードを発見・達成の小さな印に使う。濃いインク色で可読性を保つ。
-- **レイアウト**: 地図を主役にした縦スクロールと、親指で押せる記録アクション。地図コントロールは44論理ピクセル以上とし、地図はドラッグ/ピンチで移動・拡大縮小できる。保存ルートは詳細画面から専用の大きな地図ページへ進み、狭いカード内に閉じ込めない。指標は地図下の紙片状ストリップに並べ、精度/実測・推定の補助タグで数値の意味を明確にする。履歴/グループはカードと写真を中心にする。中央寄せの均等グリッドを避ける。
+- **レイアウト**: 地図を主役にした縦スクロールと、親指で押せる記録アクション。グループ承認、通報、削除の確認は同じ紙片状カード/ボトムシートで、状態と取り消せない処理を文面で明確にする。
 - **シグネチャー要素**: 1) 切符の切り欠きを思わせる活動カード、2) テラコッタ色の経路と丸い地点ピン、3) 横スクロールできる写真シール。
-- **インタラクション**: 記録開始は片手で押せる大ボタン。一時停止/再開/終了は状態が色・文言で変わる。地図は一指ドラッグと二指ピンチに対応し、押しやすいズーム/現在地ボタンと青い現在地マーカーで位置を迷わせない。スポット作成は地図タップを入口にし、場所・公開先・複数写真を短いシートで入力する。グループのデモフィードは実データと視覚的に区別する。
-- **アニメーション**: 地図のドラッグ/ピンチは指に即応し、取得済み地図画像と軌跡を同一の短い変形で動かす。ルートの新しい区間は短いフェードで現れる。ボタンには小さな押下縮小、保存時は短いチェック表示を使う。指標や地図を邪魔する長い移動/バウンス演出は避ける。
+- **インタラクション**: 記録開始は片手で押せる大ボタン。一時停止/再開/終了は状態が色・文言で変わる。スポット作成と公開先選択を短いシートで行う。承認待ち共有は投稿者に状態を表示し、ブロック/削除は二段階で確認する。
+- **アニメーション**: 地図のドラッグ/ピンチは指に即応し、取得済み地図画像と軌跡を同一の短い変形で動かす。保存時は短いチェック表示を使い、削除/通報確認では動きを控えめにする。
 - **タイポグラフィ**: 見出しと本文はZen Maru Gothic、数値ラベルは端末の読みやすいサンセリフ数字を使う。大きな数値を中太、補助情報は小さくしつつコントラストを維持する。
 - **ブランドエッセンス**: 「歩いた軌跡と町角の記憶を、ひとつの地図に残す。」— 温かい、好奇心のある、気軽。
-- **ブランドボイス**: 見出しとCTAは親しみやすく具体的に。「歩いたぶんだけ、町が近くなる。」「今日の寄り道も、ちゃんと記録。」
-- **ワードマーク/ロゴ**: 丸みのある「まちある」の文字に、足あとを思わせる点線とピンを添える。アイコンは角丸を焼き込まない正方形で、生成り地にテラコッタのピンとマスタード色のルート点を置く。
+- **ブランドボイス**: 見出しとCTAは親しみやすく具体的に。「歩いたぶんだけ、町が近くなる。」「今日の寄り道も、ちゃんと記録。」安全/削除では短く正確な日本語を使う。
+- **ワードマーク/ロゴ**: 丸みのある「まちある」の文字に、足あとを思わせる点線とピンを添える。既存のアイコンを維持する。
 - **シグネチャーカラー**: テラコッタ `#D05A3A`。
 
 ## プロジェクト構成
@@ -38,59 +37,60 @@
 app/
   (tabs)/index.tsx        地図、記録コントロール、スポット登録/詳細
   (tabs)/records.tsx      個人の歩行履歴
-  (tabs)/groups.tsx       グループ作成/参加、共有地図とフィード
-  (tabs)/profile.tsx      表示名/写真/累計とManusアカウントへのメールログイン連携
-  oauth/callback.tsx      既存Manus OAuthコールバック
+  (tabs)/groups.tsx       グループ作成/参加、共有地図、承認、通報/ブロック
+  (tabs)/profile.tsx      表示名、写真、メール/パスワード設定、削除/Storage処理
+  legal/privacy.tsx       ログイン前から閲覧できるプライバシー説明
+  legal/support.tsx       問い合わせ/コミュニティルール
   walk/[id].tsx           保存済み歩行の詳細地図と指標
   walk/map.tsx            保存済み歩行の全画面ルート地図
 components/
-  map/static-map.tsx      Maps画像、SVGルート、パン/ピンチ、現在地マーカー、座標ピック
-  login-gate.tsx          Manus OAuthとメール/パスワードのログイン/登録画面
-  machiaru-ui.tsx         紙片カード、指標、CTA、書式部品
-  spot-photo.tsx          写真IDから認可済み署名URLを取得する表示
-  demo-group-preview.tsx  ローカルfixtureの共有地図・ルート・写真フィード
+  login-gate.tsx          メール/パスワードのみのログインと新規登録
+  map/static-map.tsx      Maps画像、SVGルート、パン/ピンチ、現在地
+  spot-photo.tsx          認可済み署名URLから写真を表示
+  demo-group-preview.tsx  DB書き込みのない読み取り専用デモ
 hooks/
-  use-walk-tracker.ts     root provider共有の高精度Location/Pedometer・背景測位キュー状態
-lib/
-  brand.ts                色とタイポグラフィ
-  trpc.ts                 既存tRPCクライアント
-  demo-group-fixtures.ts  DB書き込みのない友人/ルート/スポットfixture
-  background-walk.ts     TaskManager背景Location taskと端末内位置キュー
-eas.json                    internal development build profile
-docs/background-location-device-test.ja.md 実機の背景位置テスト手順とOS制約
+  use-walk-tracker.ts     前景/背景位置、歩数、ローカル下書き
+constants/runtime.ts     API base URLと公開Legal情報
+lib/_core/auth.ts        Web/native session token保存とログアウト
+lib/background-walk.ts   TaskManager背景Location taskと端末内位置キュー
 server/
-  routers.ts              認証済みCRUD、プライバシー、写真権限と共有API
-  db.ts                   既存Manus OAuthユーザーとDrizzle接続
-  storage.ts              既存Manus Storageアップロード/署名URLアダプター
-  map-service.ts          Mapsプロキシのサーバー側画像取得
-  _core/                  既存Express/tRPC/OAuth基盤
-  email-password.ts       scrypt、資格情報照合、認証失敗回数制限
-  drizzle/
-    schema.ts             ユーザー、メール資格情報、歩行、スポット、写真、グループのテーブル
-    0001_*.sql             追記型マイグレーション
+  routers.ts              メール認証、削除、共有、承認、通報、ブロックAPI
+  email-auth.ts           scrypt、メール資格情報照合、セッション発行
+  account-deletion.ts     削除、共有グループ引継ぎ、Storage削除待ち台帳
+  moderation.ts           相互ブロック判定のサーバー補助関数
+  storage.ts              既存Managed Storage upload/署名URLアダプター
+  _core/auth.ts           Cookie/Bearer sessionとWeb Preview bridge
+  _core/account-session.ts HMAC化された削除session識別子
+  _core/legal.ts          公開privacy/supportページ
+  drizzle/schema.ts       既存テーブルと審査/通報/ブロック/削除要求/tombstone
+  drizzle/0003_app_store_safety.sql, 0004_*  追加的なManaged MySQL migrations
+tests/
+  auth.logout.test.ts     email session logout/cookie test
+  legal.test.ts           公開Legal route設定とescape test
+  moderation.test.ts      相互ブロックの認可test
+  account-session.test.ts 削除session fingerprintのHMAC test
+docs/
+  background-location-device-test.ja.md  実機の背景位置テストとOS制約
 assets/images/             アプリアイコン、スプラッシュ、Androidアイコン
-assets/demo/               ローカルのデモ共有フィード用写真
+eas.json                   development/production build profiles
 ```
 
 ## データと画面の接続
 
 - `use-walk-tracker`が前景の高精度GPSとPedometerを購読し、background taskが保留した位置点も復帰時に同じノイズ/飛び値フィルターで処理する。累積時間・距離・速度・歩数・精度をホーム画面に渡し、終了時に歩行点を活動レコードとして保存する。
-- 平均速度は一時停止を除いた稼働時間から計算し、現在速度は有効な移動区間の中央値を用いて短期的な揺れを平滑化する。GPS水平精度と距離由来の推定歩数は画面上で明示する。
-- Maps画像はAPIサーバーからMapsプロキシ経由で取得し、画面側でメモ化/点数制限したReact Native SVG軌跡を重ねる。Reanimatedの表示変形でドラッグ/ピンチに即応し、地図読み込み中も旧画像を保って軌跡/現在地との座標整合を維持する。歩行詳細の専用ページでは保存ルートを広い表示枠に合わせ、同じ指操作で見返せる。
-- 写真はログイン済みtRPCアップロードからManus Storageへ送り、DBに内部Storage参照を保持する。写真IDを受け取ったサーバーは本人所有または対象グループの現メンバーかを確認してから、一時署名URLを返す。安定パスへの公開プロキシはアプリAPIに登録しない。
-- グループ作成と作成者membershipはDBトランザクションで登録する。グループ一覧、共有地図、フィード、詳細、写真署名URLはメンバーシップをサーバーで検証する。デモグループの表示はローカルfixtureのみを用い、API/Database/storageへ送信しない。
-- メール登録時はアドレスを正規化し、ユニークな資格情報行とアプリユーザーをトランザクションで作る。Manusログイン済みのユーザーは自分の現在のManusメールにパスワードを設定して同一プロフィールへ紐付ける。WebはHttpOnly Cookieと有効期限付きsessionStorage Bearer fallback、ネイティブはSecureStoreのBearerセッションを使い、共通の`/api/auth/me`とログアウト処理を維持する。
+- 写真はログイン済みtRPCアップロードからManaged Storageへ送り、DBに内部Storage参照を保持する。写真IDを受け取ったサーバーは本人所有またはグループ現メンバーであることとブロック状態を確認してから署名URLを返す。
+- グループ共有の新規歩行とスポットは承認待ち状態で保存し、作成者が承認したデータだけフィードと共有地図へ返す。報告は永続化し、グループ作成者が対応する。ブロックは一覧・詳細・投稿写真・プロフィール画像取得のすべてで有効にする。
+- アカウント削除はMySQLのトランザクションで資格情報、プロフィール、個人記録、スポット、グループ参加を整理する。所有グループは残存メンバーへ引き継ぎ、アップロード済みStorageキーはアカウント削除・プロフィール画像差替の両方で削除待ち台帳に保持する。別端末の旧sessionによるユーザー再生成を止めるHMAC tombstoneは最大1年で期限切れとし、認証要求処理で整理する。物理Storage削除を確認した後にのみ待ち台帳を完了にできる。
+- メール登録時はアドレスを正規化し、ユニークな資格情報行とアプリユーザーをトランザクションで作る。旧利用者は既存の有効なセッションを使ってメール/パスワードを設定できる。WebのHttpOnly CookieとBearer fallback、ネイティブのSecureStore、共通の`/api/auth/me`とログアウト処理を維持する。
+- `/api/legal/privacy`と`/api/legal/support`はアプリ内画面からも参照される公開向け情報ページ。運営者名と連絡先が未設定の場合は、誤った連絡先を返さず503にする。
 
 ## 前提と制約
 
-- Managed Mobileの固定Expoスターター、8081/3000、Manus管理リポジトリを維持する。
-- EAS development profileは内部配布用にする。EAS cloud buildはbuild quotaを使う。iPhone実機向けiOS internal buildにはApple Developer Program署名と端末登録が必要で、初回のEAS project linking/buildはユーザーの明示確認前に起動しない。
-- Managed Databaseは開発/本番で共有される。マイグレーションは追加的に行い、テスト時に破壊的な変更や実ユーザーデータ/デモfixtureの投入はしない。サンプルグループは読み取り専用でアプリ内表示する。メールアドレスは確認済みと見なさず、メール確認もメールでのパスワード再設定も提供しないという制約をログインUIに明記する。
-- 地図APIキー、DB資格情報、セッション署名情報はサーバー専用。端末/ブラウザーへ秘密鍵を含めない。
-- Expoの`EXPO_TOKEN`は環境同期でプロセスへ渡し、QR生成内容以外のログ、コード、画面、コミットに含めない。QR画像自体には接続用URLだけを含める。
-- 写真のバイト列は永続ストレージ、写真の所有/スポット関連はDBに置く。private/group mediaは認可済みの短期署名URLを介して表示する。
-- GPSは利用者が歩行記録を開始した間だけ取得する。背景権限が許可されている場合はアプリが画面ロック/背景中の位置イベントを端末内へ一時保留し、アプリ復帰時に既存のGPS品質フィルターを通してルートへ反映する。常時位置監視は行わない。
-- 自動公開は有効化しない。アプリのチェックポイント作成と一般公開は別の操作として扱う。
-- Expo SDK 58の背景位置測位はExpo Go非対応で、development buildが必要。Expo Locationの背景モード・Android foreground-service権限・iOS Always/Android foreground+background permissionsを設定する。
-- OSがユーザーによるアプリ終了/強制停止を検知すると背景位置更新は停止する。Androidは終了後に位置イベントで自動再起動しない。背景/画面ロック中の計測を目標にし、強制終了後まで継続すると説明しない。
-- 背景でPedometerの継続を保証できないときは距離由来の推定歩数に切り替えて表示する。位置精度と歩幅には個体差があり、医療用途の正確性は保証しない。
+- Managed Mobileの固定Expoスターター、8081/3000、Manus管理リポジトリを維持する。Manusはアプリ画面のログインプロバイダーから外すが、Managed backend、Storage、Maps、署名済みセッション、Preview/cronのプラットフォーム基盤は残す。
+- Managed Databaseは開発/本番で共有される。migrationは追記型にし、テスト中に実ユーザーの記録/写真/アカウントを削除しない。共有データの削除動作はモック/単体テストで検証する。
+- Managed Storageの通常ランタイムAPIには物理削除がない。削除を「完了」と表示する前に運営者がオブジェクトを消す必要があり、その運用を公開前に整える。
+- プライバシーポリシーの運営者表記、公開問い合わせメール、安定HTTPS URL、本番API URLは未確認。値を捏造したりPreview URLを公開URLに流用しない。これらは未設定のままではproduction buildを止める。
+- iOS実機でのバックグラウンド計測は、開発ビルドの署名/端末登録と物理端末での利用者確認が必要。アプリ終了/強制停止後の計測は保証しない。
+- iOS native release buildはManaged Mobile Dashboardを使う。ユーザーの明示的な依頼なしにApp Store提出、公開、資格情報の失効/置換を行わない。プロジェクトの自動公開は無効。
+- 地図APIキー、DB資格情報、署名情報、Expo tokenはサーバー/保護環境に限り、端末/ブラウザーへ秘密鍵を含めない。
+- 歩数は環境によって距離由来の推定値となり、GPS精度や歩幅には個体差があるため医療用途の正確性を保証しない。

@@ -662,6 +662,65 @@ function useWalkTrackerController() {
     return result;
   }, [changeState, flushBackgroundLocations, persistWalkDraft, snapshotElapsed, stopBackgroundTracking, stopSubscriptions]);
 
+  const stopForAccountRemoval = useCallback(async () => {
+    if (runStateRef.current === "tracking") {
+      try {
+        await flushBackgroundLocations();
+      } catch {
+        // Keep the last persisted draft if an OS queue read is unavailable.
+      }
+      elapsedBeforeActiveRef.current = snapshotElapsed();
+      setElapsedSeconds(elapsedBeforeActiveRef.current);
+    }
+    stopSubscriptions();
+    await stopBackgroundTracking();
+    if (runStateRef.current === "tracking") changeState("paused");
+    await persistWalkDraft().catch(() => undefined);
+  }, [changeState, flushBackgroundLocations, persistWalkDraft, snapshotElapsed, stopBackgroundTracking, stopSubscriptions]);
+
+  const discardCurrentAccountDraft = useCallback(async () => {
+    if (draftSaveTimerRef.current) {
+      clearTimeout(draftSaveTimerRef.current);
+      draftSaveTimerRef.current = null;
+    }
+    const ownerId = draftOwnerIdRef.current;
+    const sessionId = startedAtRef.current ? String(startedAtRef.current) : undefined;
+    if (ownerId) await clearWalkDraft(ownerId, sessionId);
+    if (Platform.OS !== "web") {
+      await clearOrphanedBackgroundWalkSession().catch(() => undefined);
+    }
+    routeRef.current = [];
+    distanceRef.current = 0;
+    stepRef.current = 0;
+    pedometerBaseRef.current = 0;
+    estimatedStepsRef.current = false;
+    startedAtRef.current = 0;
+    elapsedBeforeActiveRef.current = 0;
+    activeSinceRef.current = 0;
+    lastProcessedTimestampRef.current = 0;
+    distanceAnchorRef.current = null;
+    speedSamplesRef.current = [];
+    lastMovementAtRef.current = 0;
+    lastDraftSavedAtRef.current = 0;
+    backgroundSessionIdRef.current = null;
+    backgroundTrackingActiveRef.current = false;
+    setRouteData([]);
+    setDistanceMeters(0);
+    setStepCount(0);
+    setEstimatedSteps(false);
+    setElapsedSeconds(0);
+    setCurrentSpeedMps(0);
+    setGpsAccuracyMeters(null);
+    setCurrentLocation(null);
+    setCurrentLocationAccuracyMeters(null);
+    setBackgroundTrackingStatus("idle");
+    setRestoredDraft(false);
+    setIsRestoringDraft(false);
+    draftOwnerIdRef.current = null;
+    setDraftOwnerIdState(null);
+    changeState("idle");
+  }, [changeState]);
+
   useEffect(() => {
     if (runState !== "tracking") return;
     const timer = setInterval(() => setElapsedSeconds(snapshotElapsed()), 1000);
@@ -735,6 +794,8 @@ function useWalkTrackerController() {
     resume,
     finish,
     clearSavedDraft,
+    stopForAccountRemoval,
+    discardCurrentAccountDraft,
     setDraftOwnerId,
   };
 }

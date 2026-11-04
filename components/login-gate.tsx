@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Image, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { AppButton, Card, Page, Tag } from "@/components/machiaru-ui";
+import { router } from "expo-router";
 import { brand, typeface } from "@/lib/brand";
-import { startOAuthLogin } from "@/constants/oauth";
 import * as Auth from "@/lib/_core/auth";
 import { trpc } from "@/lib/trpc";
 
-type LoginMethod = "manus" | "email";
 type EmailMode = "login" | "register";
 
 const inputStyle = {
@@ -21,33 +20,22 @@ const inputStyle = {
 };
 
 export function LoginGate() {
-  const [method, setMethod] = useState<LoginMethod>("manus");
   const [emailMode, setEmailMode] = useState<EmailMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [oauthLoading, setOauthLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [message, setMessage] = useState("");
   const emailLogin = trpc.auth.emailLogin.useMutation();
   const emailRegister = trpc.auth.emailRegister.useMutation();
 
-  const signInWithManus = async () => {
-    setOauthLoading(true);
-    setMessage("");
-    try {
-      await startOAuthLogin();
-    } catch {
-      setMessage("Manusログイン画面を開けませんでした。少し待ってからもう一度お試しください。");
-    } finally {
-      setOauthLoading(false);
-    }
-  };
-
   const signInWithEmail = async () => {
     setEmailLoading(true);
     setMessage("");
     try {
+      if (password.length < 12 || password.length > 128) {
+        throw new Error("パスワードは12〜128文字で入力してください。");
+      }
       if (emailMode === "register" && password !== confirmPassword) {
         throw new Error("確認用パスワードが一致しません。");
       }
@@ -96,82 +84,80 @@ export function LoginGate() {
         </View>
       </Card>
 
-      {method === "manus" ? (
-        <View style={{ gap: 11 }}>
-          <AppButton label="Manusアカウントでログイン" onPress={signInWithManus} loading={oauthLoading} />
-          <AppButton label="メールアドレスでログイン／新規登録" variant="outline" onPress={() => { setMethod("email"); setMessage(""); }} />
+      <Card style={{ gap: 12 }}>
+        <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 16 }}>{emailMode === "register" ? "メールアカウントを作成" : "メールでログイン"}</Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable accessibilityRole="button" onPress={() => { setEmailMode("login"); setConfirmPassword(""); setMessage(""); }} style={{ flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: emailMode === "login" ? "#F8E2D5" : brand.paperLight }}>
+            <Text style={{ color: emailMode === "login" ? brand.terracottaDark : brand.muted, fontFamily: typeface.bold, fontSize: 12 }}>ログイン</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { setEmailMode("register"); setMessage(""); }} style={{ flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: emailMode === "register" ? "#F8E2D5" : brand.paperLight }}>
+            <Text style={{ color: emailMode === "register" ? brand.terracottaDark : brand.muted, fontFamily: typeface.bold, fontSize: 12 }}>新規登録</Text>
+          </Pressable>
         </View>
-      ) : (
-        <Card style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 16 }}>{emailMode === "register" ? "メールアカウントを作成" : "メールでログイン"}</Text>
-            <Pressable accessibilityRole="button" onPress={() => { setMethod("manus"); setMessage(""); }}>
-              <Text style={{ color: brand.terracotta, fontFamily: typeface.medium, fontSize: 12 }}>Manusログインへ</Text>
-            </Pressable>
-          </View>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable accessibilityRole="button" onPress={() => { setEmailMode("login"); setConfirmPassword(""); setMessage(""); }} style={{ flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: emailMode === "login" ? "#F8E2D5" : brand.paperLight }}>
-              <Text style={{ color: emailMode === "login" ? brand.terracottaDark : brand.muted, fontFamily: typeface.bold, fontSize: 12 }}>ログイン</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => { setEmailMode("register"); setMessage(""); }} style={{ flex: 1, minHeight: 38, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: emailMode === "register" ? "#F8E2D5" : brand.paperLight }}>
-              <Text style={{ color: emailMode === "register" ? brand.terracottaDark : brand.muted, fontFamily: typeface.bold, fontSize: 12 }}>新規登録</Text>
-            </Pressable>
-          </View>
-          <TextInput
-            accessibilityLabel="メールアドレス"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="メールアドレス"
-            placeholderTextColor="#A99A8C"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={320}
-            style={inputStyle}
-          />
-          <TextInput
-            accessibilityLabel="パスワード"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="パスワード（12文字以上）"
-            placeholderTextColor="#A99A8C"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={128}
-            style={inputStyle}
-          />
-          {emailMode === "register" ? (
-            <>
-              <TextInput
-                accessibilityLabel="確認用パスワード"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="パスワードをもう一度入力"
-                placeholderTextColor="#A99A8C"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={128}
-                style={inputStyle}
-              />
-              <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, lineHeight: 17 }}>
-                この登録ではメールアドレスを確認しません。パスワードを忘れた場合のメール再設定もありません。大切に保管してください。
-              </Text>
-            </>
-          ) : null}
-          <AppButton
-            label={emailMode === "register" ? "メールでアカウントを作成" : "メールでログイン"}
-            onPress={signInWithEmail}
-            loading={emailLoading}
-            disabled={!email.trim() || !password || (emailMode === "register" && !confirmPassword)}
-          />
-        </Card>
-      )}
+        <TextInput
+          accessibilityLabel="メールアドレス"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="メールアドレス"
+          placeholderTextColor="#A99A8C"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={320}
+          style={inputStyle}
+        />
+        <TextInput
+          accessibilityLabel="パスワード"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="パスワード（12〜128文字）"
+          placeholderTextColor="#A99A8C"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={128}
+          style={inputStyle}
+        />
+        {emailMode === "register" ? (
+          <>
+            <TextInput
+              accessibilityLabel="確認用パスワード"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="パスワードをもう一度入力"
+              placeholderTextColor="#A99A8C"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={128}
+              style={inputStyle}
+            />
+            <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, lineHeight: 17 }}>
+              この登録ではメールアドレスを確認しません。パスワードを忘れた場合のメール再設定もありません。大切に保管してください。
+            </Text>
+          </>
+        ) : null}
+        <AppButton
+          label={emailMode === "register" ? "メールでアカウントを作成" : "メールでログイン"}
+          onPress={signInWithEmail}
+          loading={emailLoading}
+          disabled={!email.trim() || password.length < 12 || password.length > 128 || (emailMode === "register" && !confirmPassword)}
+        />
+      </Card>
+      <Card style={{ gap: 7 }}>
+        <Text style={{ color: brand.ink, fontFamily: typeface.bold, fontSize: 13 }}>以前からお使いの方へ</Text>
+        <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, lineHeight: 18 }}>
+          Manusログインは終了しました。まだログイン状態の端末がある場合は、プロフィールでメールアドレスとパスワードを設定して同じ記録を引き継いでください。すでに全端末からログアウトし、メールログインも未設定の場合、アプリから自動でアカウントを復旧することはできません。
+        </Text>
+      </Card>
       {message ? <Text accessibilityRole="alert" style={{ color: brand.terracottaDark, fontFamily: typeface.regular, fontSize: 12 }}>{message}</Text> : null}
       <Text style={{ color: brand.muted, fontFamily: typeface.regular, fontSize: 11, textAlign: "center", lineHeight: 17 }}>
-        ログイン後、歩行記録や写真の公開先は「自分のみ」か、選んだグループから選べます。Manusログインも引き続き利用できます。
+        ログイン後、歩行記録や写真の公開先は「自分のみ」か、選んだグループから選べます。
       </Text>
+      <View style={{ flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 18, paddingVertical: 8 }}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/legal/privacy" as never)}><Text style={{ color: brand.terracottaDark, fontFamily: typeface.bold, fontSize: 11 }}>プライバシーポリシー</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/legal/support" as never)}><Text style={{ color: brand.terracottaDark, fontFamily: typeface.bold, fontSize: 11 }}>お問い合わせ・ルール</Text></Pressable>
+      </View>
     </Page>
   );
 }

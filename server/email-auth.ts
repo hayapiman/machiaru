@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { emailCredentials, users, type User } from "../drizzle/schema";
@@ -38,7 +38,7 @@ function duplicateEmailError(error: unknown): boolean {
 function registrationConflict(): TRPCError {
   return new TRPCError({
     code: "CONFLICT",
-    message: "このメールアドレスでは登録できません。既存のManusアカウントはプロフィールから連携できます。",
+    message: "このメールアドレスは既に使われています。ログインするか、以前からの利用者はログイン済み端末のプロフィールでパスワードを設定してください。",
   });
 }
 
@@ -151,13 +151,13 @@ export async function hasEmailPassword(userId: number): Promise<boolean> {
 
 export async function setEmailPasswordForUser(
   ctx: TrpcContext & { user: User },
-  input: { newPassword: string; currentPassword?: string },
+  input: { email?: string; newPassword: string; currentPassword?: string },
 ) {
-  const email = normalizeEmail(ctx.user.email ?? "");
+  const email = normalizeEmail(input.email ?? ctx.user.email ?? "");
   if (!email) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Manusアカウントにメールアドレスが登録されていないため、メールログインを設定できません。",
+      message: "メールアドレスを入力してください。",
     });
   }
 
@@ -187,16 +187,29 @@ export async function setEmailPasswordForUser(
     throw registrationConflict();
   }
 
+  const [otherUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(sql`lower(${users.email}) = ${email}`, ne(users.id, ctx.user.id)))
+    .limit(1);
+  if (otherUser) {
+    recordEmailAuthFailure(email);
+    throw registrationConflict();
+  }
+
   const passwordHash = await hashPassword(input.newPassword);
   try {
-    if (existingCredential) {
-      await db
-        .update(emailCredentials)
-        .set({ email, passwordHash })
-        .where(eq(emailCredentials.userId, ctx.user.id));
-    } else {
-      await db.insert(emailCredentials).values({ userId: ctx.user.id, email, passwordHash });
-    }
+    await db.transaction(async (tx) => {
+      if (existingCredential) {
+        await tx
+          .update(emailCredentials)
+          .set({ email, passwordHash })
+          .where(eq(emailCredentials.userId, ctx.user.id));
+      } else {
+        await tx.insert(emailCredentials).values({ userId: ctx.user.id, email, passwordHash });
+      }
+      await tx.update(users).set({ email, loginMethod: "email_password" }).where(eq(users.id, ctx.user.id));
+    });
   } catch (error) {
     if (duplicateEmailError(error)) throw registrationConflict();
     throw error;

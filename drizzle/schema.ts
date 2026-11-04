@@ -11,7 +11,7 @@ export const users = mysqlTable("users", {
    * Use this for relations between tables.
    */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
+  /** Stable internal session identifier. The field name is retained for existing records and tokens. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -96,6 +96,7 @@ export const walkSessions = mysqlTable(
     averageSpeedMps: double("averageSpeedMps").notNull().default(0),
     stepCount: int("stepCount").notNull().default(0),
     visibility: mysqlEnum("visibility", ["private", "group"]).default("private").notNull(),
+    moderationStatus: mysqlEnum("moderationStatus", ["pending", "approved", "rejected"]).default("approved").notNull(),
     routeData: json("routeData").$type<RoutePoint[]>().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
@@ -118,6 +119,7 @@ export const visitedSpots = mysqlTable(
     longitude: double("longitude").notNull(),
     visitedAt: timestamp("visitedAt").notNull(),
     visibility: mysqlEnum("visibility", ["private", "group"]).default("private").notNull(),
+    moderationStatus: mysqlEnum("moderationStatus", ["pending", "approved", "rejected"]).default("approved").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => [
@@ -138,4 +140,64 @@ export const spotPhotos = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => [index("spot_photos_spot_idx").on(table.spotId)],
+);
+
+export const userBlocks = mysqlTable(
+  "user_blocks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    blockerUserId: int("blockerUserId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    blockedUserId: int("blockedUserId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_blocks_pair_unique_idx").on(table.blockerUserId, table.blockedUserId),
+    index("user_blocks_blocked_idx").on(table.blockedUserId),
+  ],
+);
+
+export const moderationReports = mysqlTable(
+  "moderation_reports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull().references(() => walkGroups.id, { onDelete: "cascade" }),
+    reporterUserId: int("reporterUserId").references(() => users.id, { onDelete: "set null" }),
+    targetUserId: int("targetUserId").references(() => users.id, { onDelete: "set null" }),
+    targetType: mysqlEnum("targetType", ["walk", "spot", "user"]).notNull(),
+    targetId: int("targetId").notNull(),
+    reason: mysqlEnum("reason", ["inappropriate", "harassment", "privacy", "spam", "other"]).notNull(),
+    details: text("details"),
+    status: mysqlEnum("status", ["open", "resolved", "dismissed"]).default("open").notNull(),
+    resolution: mysqlEnum("resolution", ["dismiss", "remove", "block"]),
+    moderatorUserId: int("moderatorUserId").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    resolvedAt: timestamp("resolvedAt"),
+  },
+  (table) => [
+    index("moderation_reports_group_status_idx").on(table.groupId, table.status, table.createdAt),
+    index("moderation_reports_target_idx").on(table.targetType, table.targetId),
+  ],
+);
+
+export const deletedAccountSessions = mysqlTable(
+  "deleted_account_sessions",
+  {
+    openIdHash: varchar("openIdHash", { length: 64 }).primaryKey(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [index("deleted_account_sessions_expiry_idx").on(table.expiresAt)],
+);
+
+export const accountDeletionRequests = mysqlTable(
+  "account_deletion_requests",
+  {
+    requestCode: varchar("requestCode", { length: 36 }).primaryKey(),
+    storageKeys: json("storageKeys").$type<string[]>().notNull(),
+    requestType: mysqlEnum("requestType", ["account_deletion", "replaced_profile_photo"]).default("account_deletion").notNull(),
+    status: mysqlEnum("status", ["pending_storage_purge", "completed"]).default("pending_storage_purge").notNull(),
+    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  (table) => [index("account_deletion_requests_status_idx").on(table.status, table.requestedAt)],
 );

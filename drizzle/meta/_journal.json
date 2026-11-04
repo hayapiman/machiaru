@@ -22,6 +22,20 @@
       "when": 1792595434872,
       "tag": "0002_lively_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1793614551483,
+      "tag": "0003_app_store_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1793782700042,
+      "tag": "0004_deleted_session_and_storage_purge",
+      "breakpoints": true
     }
   ]
 }

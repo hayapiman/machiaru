@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { deletedAccountSessions, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { hashDeletedSessionOpenId } from "./_core/account-session";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -21,6 +22,10 @@ export async function getDb() {
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
+  }
+
+  if (await isDeletedAccountSession(user.openId)) {
+    throw new Error("Cannot restore an account with a revoked session.");
   }
 
   const db = await getDb();
@@ -87,6 +92,31 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+let lastDeletedSessionPruneAt = 0;
+
+export async function isDeletedAccountSession(openId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable while validating the session.");
+
+  const now = new Date();
+  if (Date.now() - lastDeletedSessionPruneAt >= 60 * 60 * 1000) {
+    try {
+      await db.delete(deletedAccountSessions).where(lte(deletedAccountSessions.expiresAt, now));
+      lastDeletedSessionPruneAt = Date.now();
+    } catch {
+      console.warn("[Database] Could not prune expired session revocation records");
+    }
+  }
+
+  const openIdHash = hashDeletedSessionOpenId(openId, ENV.cookieSecret);
+  const [entry] = await db
+    .select({ openIdHash: deletedAccountSessions.openIdHash })
+    .from(deletedAccountSessions)
+    .where(and(eq(deletedAccountSessions.openIdHash, openIdHash), gt(deletedAccountSessions.expiresAt, now)))
+    .limit(1);
+  return Boolean(entry);
 }
 
 // TODO: add feature queries here as your schema grows.

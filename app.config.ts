@@ -41,27 +41,72 @@ const env = {
 // Expo serializes this browser-safe subset into native and web bundles. The server-only
 // MANUS_API_KEY and MANUS_JWT_SECRET must never enter this object.
 const publicRuntime = {
-  oauthPortalUrl:
-    process.env.MANUS_OAUTH_PORTAL_URL ??
-    process.env.VITE_OAUTH_PORTAL_URL ??
-    process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ??
-    "",
-  oauthServerUrl:
-    process.env.MANUS_OAUTH_API_URL ??
-    process.env.OAUTH_SERVER_URL ??
-    process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ??
-    "",
-  appId:
-    process.env.MANUS_PROJECT_ID ??
-    process.env.VITE_APP_ID ??
-    process.env.EXPO_PUBLIC_APP_ID ??
-    "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+  privacyPolicyUrl: process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() ||
+    (process.env.EXPO_PUBLIC_API_BASE_URL?.trim()
+      ? `${process.env.EXPO_PUBLIC_API_BASE_URL.trim().replace(/\/$/, "")}/api/legal/privacy`
+      : ""),
+  supportUrl: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ||
+    (process.env.EXPO_PUBLIC_API_BASE_URL?.trim()
+      ? `${process.env.EXPO_PUBLIC_API_BASE_URL.trim().replace(/\/$/, "")}/api/legal/support`
+      : ""),
+  operatorName: process.env.EXPO_PUBLIC_OPERATOR_NAME?.trim() ?? "",
+  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() ?? "",
 };
 
-const config: ExpoConfig = {
+const transientHostSuffixes = [
+  ".manus.computer",
+  ".ngrok.io",
+  ".ngrok-free.app",
+  ".trycloudflare.com",
+  ".loca.lt",
+  ".localtunnel.me",
+  ".devtunnels.ms",
+];
+
+function assertStablePublicHttpsUrl(value: string, label: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a stable public HTTPS URL.`);
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  const ipLiteral = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname) || /^\[[0-9a-f:]+\]$/i.test(hostname);
+  const transientHost = transientHostSuffixes.some((suffix) =>
+    hostname === suffix.slice(1) || hostname.endsWith(suffix),
+  );
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    ipLiteral ||
+    !hostname.includes(".") ||
+    transientHost
+  ) {
+    throw new Error(`${label} must use a stable public HTTPS domain, not localhost, an IP address, Preview, or a temporary tunnel.`);
+  }
+}
+
+if (process.env.EAS_BUILD_PROFILE === "production") {
+  assertStablePublicHttpsUrl(publicRuntime.apiBaseUrl, "EXPO_PUBLIC_API_BASE_URL");
+  if (!publicRuntime.operatorName.trim()) {
+    throw new Error("Set EXPO_PUBLIC_OPERATOR_NAME before creating an App Store build.");
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publicRuntime.supportEmail.trim())) {
+    throw new Error("Set a valid public EXPO_PUBLIC_SUPPORT_EMAIL before creating an App Store build.");
+  }
+  assertStablePublicHttpsUrl(publicRuntime.privacyPolicyUrl, "EXPO_PUBLIC_PRIVACY_POLICY_URL");
+  assertStablePublicHttpsUrl(publicRuntime.supportUrl, "EXPO_PUBLIC_SUPPORT_URL");
+}
+
+const config: ExpoConfig & { logoUrl: string } = {
   name: env.appName,
   slug: env.appSlug,
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519664029594046/zkOweoknBAKklTcJ.png",
   version: "1.0.0",
   extra: {
     ...publicRuntime,
@@ -115,7 +160,6 @@ const config: ExpoConfig = {
     "expo-status-bar",
     "expo-web-browser",
     "expo-asset",
-    "expo-image-picker",
     ["expo-image-picker", { photosPermission: "訪問した場所の記録に写真へのアクセスを許可します。" }],
     [
       "expo-location",
@@ -128,19 +172,6 @@ const config: ExpoConfig = {
       },
     ],
     ["expo-sensors", { motionPermission: "歩数を記録するため、モーションデータへのアクセスを許可します。" }],
-    [
-      "expo-audio",
-      {
-        microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
-      },
-    ],
-    [
-      "expo-video",
-      {
-        supportsBackgroundPlayback: true,
-        supportsPictureInPicture: true,
-      },
-    ],
     [
       "expo-splash-screen",
       {

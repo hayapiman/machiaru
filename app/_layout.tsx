@@ -82,8 +82,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <WalkTrackerProvider>
             <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="(tabs)" />
               <Stack.Screen name="walk/[id]" />
               <Stack.Screen name="walk/map" />
             </Stack>
