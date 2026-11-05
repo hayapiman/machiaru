@@ -1,21 +1,23 @@
-# まちある — App Store 公開準備 実装計画
+# まちある — GitHub共有向け実装計画
 
 ## プロダクト
 
-「まちある」は、GPSによる街歩きの軌跡と健康指標を記録し、訪問スポットに写真やメモを残し、個人または友人グループで共有する縦持ちモバイルアプリ。既存の旅の手帖コラージュのデザインを保ち、App Store公開前に必要なアカウント削除、データ処理説明と問い合わせ導線、グループ内コンテンツ安全策、メール専用ログイン、本番配布設定を整える。
+「まちある」は、GPSによる街歩きの軌跡と健康指標を記録し、訪問スポットに写真やメモを残し、個人または友人グループで共有する縦持ちモバイルアプリ。既存の旅の手帖コラージュのデザインと安全機能を維持し、現在の配布方針はApp Storeではなく個人GitHubでのソース共有とする。GitHub共有はアプリのインストール配布やバックエンド移行とは別である。
 
 ## 実装方式
 
-- **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。固定ポート8081/3000やManus管理リポジトリを変更しない。
+- **アプリ基盤**: 初期化済みのManaged Mobile Expo Router / React Native / TypeScriptを維持する。APIは同スターターのExpress + tRPC、永続化はDrizzle + Managed MySQL。固定ポート8081/3000とMobileのManus管理canonicalリポジトリを維持し、個人GitHubはソース共有用の別リポジトリとする。GitHubへの同期は自動ではなく、Managed Mobileのnative buildはGitHub-canonicalに対応しない。
 - **認証**: アプリから選べるログイン方式をメールアドレス＋パスワードだけにする。登録・ログインは既存のscryptパスワードハッシュを使い、メール確認とメールでのパスワード再設定は提供しない。Manus OAuthのログインUI、コールバック画面、ログイン用APIルート、クライアント設定値は削除する。既存の有効なセッションとユーザーIDは壊さず、ログイン中の旧利用者がプロフィールからメール＋パスワードを設定して移行できるようにする。既存利用者が設定前にログアウト／アプリ削除した場合の復旧手段がない制約をログイン画面で案内する。Webでは`webdev_app_session` HttpOnly Cookieとタブ単位のBearer fallback、ネイティブではSecureStoreのBearer tokenを使う。HTTPS Previewでは`SameSite=None; Secure`を維持する。プラットフォーム署名secretはセッション検証用にサーバーだけで用い、ユーザー向けログイン方式とは混同しない。
 - **アカウント削除**: プロフィールに削除導線と明示確認を追加し、サーバー側でメール資格情報、プロフィール、歩行ルート/指標、スポット/ノート、グループ所属を削除する。所有グループは最古の残存メンバーへ所有権を移し、残存メンバーがいない場合だけグループを削除する。利用者がアップロードした写真、プロフィール画像、プロフィール写真の差替で孤立する旧Storage keyを削除待ち台帳へ記録し、通常APIから即時に参照・取得できなくする。削除時には内部session IDをcookie signing secretでHMAC化したtombstoneを最大1年間持ち、別端末の有効な旧sessionからユーザー行が再生成されるのを防ぎ、期限切れ記録は認証要求処理で整理する。Managed Storageのランタイム契約には物理削除APIがないため、実ファイルはプロジェクト運営者がStorage管理面で削除するまで「削除処理中」とし、完了済みと誤表示しない。管理者は物理削除の後でのみ受付を完了にできる。
   削除transactionと既存session upsertは同一users rowを最初に`FOR UPDATE`でロックして直列化する。競合する実データを使ったDB stress testは行わない。
-- **プライバシーと問い合わせ**: ログイン前から見られる日本語のプライバシー説明と問い合わせページをアプリ内に設け、公開HTTPS endpoint `GET /api/legal/privacy` と `GET /api/legal/support` も用意する。メールアドレス、プロフィール、歩行の精密位置/日時/距離/速度/歩数、スポット名/ノート/位置/写真、グループ共有範囲、保存先、共有相手、保持・削除方法、旧session再生成防止に使うHMAC fingerprintの期限付き保持を実動作に合わせて説明する。運営者名と公開可能な問い合わせ先メール、本番API URLは未確定のため公開値を仮定しない。未設定の公開Legal endpointは503を返し、App Store ConnectにはPreviewや一時URLを登録しない。
+- **プライバシーと問い合わせ**: ログイン前から見られる日本語のプライバシー説明と問い合わせページをアプリ内に設け、公開HTTPS endpoint `GET /api/legal/privacy` と`GET /api/legal/support`を稼働させる。メールアドレス、プロフィール、歩行の精密位置/日時/距離/速度/歩数、スポット名/ノート/位置/写真、グループ共有範囲、保存先、共有相手、保持・削除方法、旧session再生成防止に使うHMAC fingerprintの期限付き保持を実動作に合わせて説明する。2026年11月6日時点で本番API URL、運営者名、公開用連絡先は登録済みで、health/privacy/supportが200を返すことを確認済み。公開値の実値はGitへ記載しない。
 - **グループ内コンテンツ安全策**: グループ共有の歩行記録とスポット（添付写真を含む）は`pending`で保存し、グループ作成者の確認後にのみフィードへ表示する。作成者は承認または却下でき、却下された内容は共有されない。メンバーは共有記録/スポットや利用者を理由付きで通報でき、グループ作成者は報告を確認し、投稿を却下し、必要ならメンバーを除外できる。利用者のブロックを永続化し、ブロック関係にある利用者同士の共有内容を通常フィード/詳細、作成者向け承認待ちキュー、投稿写真/プロフィール写真の署名URL発行から相互に除外する。タイトルやノートの入力はサーバー側でも検証し、コミュニティルールと問い合わせ先をアプリ内で示す。
 - **地図・歩行計測**: Google Maps Static Maps APIをプラットフォームMapsプロキシ経由でサーバー側取得する。APIキーはサーバーだけで使い、画面には歩行ルートをSVG線、訪問場所を最大200件のピンとして重ねる。Reanimatedで地図画像・軌跡・現在地を同時に即時移動/拡縮し、ドラッグ/ピンチは画像取得中も受け付け、操作が落ち着いて160ms後に最新viewportだけを要求する。GPS品質フィルター、速度平滑化、実測/推定歩数の区別、詳細地図ページを維持する。
 - **バックグラウンド位置記録**: `expo-task-manager`のmodule-scope Location taskをroot layoutから登録し、歩行中にAlways/background権限が許可された場合だけ位置更新を使う。Androidではforeground-service通知を表示する。画面ロック/他アプリ使用中の位置イベントは端末内へ一時保留し、復帰時に既存のGPS品質フィルターを通す。OSがアプリを終了/強制停止した後の計測は保証しない。実機確認は物理端末の利用者が日本語手順書に沿って行う。
-- **本番配布設定**: `eas.json`にストア配布用production profileを設け、iOS build番号を自動増分する。Express APIはNode/pnpmを固定したroot `Dockerfile`でcontainer化し、無認証`/api/health`をdeployment readiness pathとして使う。安定した公開API URLはcontainer publishで取得し、ユーザーの公開連絡先が確定するまでpublic deploymentを実行しない。EAS/Managed MobileのDashboard buildを使い、Sandboxからネイティブrelease buildを起動しない。本番API、運営者名、問い合わせ先、安定したHTTPSのprivacy/support URLが不足する場合は`app.config.ts`がproduction buildを拒否する。URL guardはlocalhost、IP、Previewと既知の一時トンネルを拒否するが、運営者は公開URLが実際に安定して200を返すことを別途確認する。現在のPreviewホストを固定値にしない。Apple App Store Connectのアプリレコード／App IDがない間はSubmit設定に架空のIDを入れない。サーバー秘密鍵をExpo公開extraへ含めない。
+- **実行/配布設定**: Express APIはNode/pnpmを固定したroot `Dockerfile`でcontainer化し、無認証`/api/health`をdeployment readiness pathとして公開済み。運営者名・公開連絡先とprivacy/supportページもproduction設定済み。API、Managed MySQL、Storage、Maps proxyは個人GitHubに移管されず、既存のManus環境で稼働する。`eas.json`には従来のストアbuild profileが残るが、App Store build/Submitは現時点の目標ではない。GitHubにソースを置いてもiOS/Androidインストール用アプリは生成されない。サーバー秘密鍵をExpo公開extraやGitへ含めない。
 - **不要な権限**: アプリで録音/動画再生を使っていないことをソース検索で確認し、未使用のaudio/video依存、マイク・バックグラウンド再生/PiP権限を外す。写真、位置、歩数に必要な目的文は日本語で正確に保つ。
+
+- **GitHubソース共有**: 個人GitHubへのソース共有用リポジトリを新規作成し、秘密情報を除いた`main`とREADME/日本語ガイドをpushする。初期公開範囲はPrivateとし、Publicへの変更は所有者の明示判断がある場合だけ行う。ライセンスは所有者が選ぶまで追加しない。
 
 ## デザイン — 旅の手帖コラージュ
 
@@ -90,8 +92,8 @@ eas.json                   development/production build profiles
 - Managed Mobileの固定Expoスターター、8081/3000、Manus管理リポジトリを維持する。Manusはアプリ画面のログインプロバイダーから外すが、Managed backend、Storage、Maps、署名済みセッション、Preview/cronのプラットフォーム基盤は残す。
 - Managed Databaseは開発/本番で共有される。migrationは追記型にし、テスト中に実ユーザーの記録/写真/アカウントを削除しない。共有データの削除動作はモック/単体テストで検証する。
 - Managed Storageの通常ランタイムAPIには物理削除がない。削除を「完了」と表示する前に運営者がオブジェクトを消す必要があり、その運用を公開前に整える。
-- プライバシーポリシーの運営者表記、公開問い合わせメール、安定HTTPS URL、本番API URLは未確認。値を捏造したりPreview URLを公開URLに流用しない。これらは未設定のままではproduction buildを止める。
+- プライバシーポリシーの運営者表記、公開問い合わせメール、安定HTTPS URL、本番API URLはproduction環境に設定済み。公開値の実値をGitへ記録しない。
 - iOS実機でのバックグラウンド計測は、開発ビルドの署名/端末登録と物理端末での利用者確認が必要。アプリ終了/強制停止後の計測は保証しない。
-- iOS native release buildはManaged Mobile Dashboardを使う。ユーザーの明示的な依頼なしにApp Store提出、公開、資格情報の失効/置換を行わない。プロジェクトの自動公開は無効。
+- iOS native release buildはManaged Mobile Dashboardを使う。現在はApp Store build/Submitを実施せず、ユーザーから再依頼があるまでストア公開を保留する。ユーザーの明示的な依頼なしにApp Store提出、公開、資格情報の失効/置換を行わない。プロジェクトの自動公開は無効。
 - 地図APIキー、DB資格情報、署名情報、Expo tokenはサーバー/保護環境に限り、端末/ブラウザーへ秘密鍵を含めない。
 - 歩数は環境によって距離由来の推定値となり、GPS精度や歩幅には個体差があるため医療用途の正確性を保証しない。

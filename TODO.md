@@ -97,7 +97,14 @@
   - App Store ConnectアプリレコードとBundle IDが用意されるまでは、Submit用の架空ASC app IDを設定しない。
   - ネイティブのストアbuildはManaged Mobile Dashboardで行い、Sandbox上でEAS release buildを起動しない。
 
+- [ ] 個人GitHubでのソース共有
+  - App Store有料配布ではなく、現在のコードと日本語セットアップ/共有案内を個人GitHubへ置く。
+  - `.env`、認証token、DB資格情報、署名secret、証明書をGit履歴へ含めない。秘密ファイルはGit ignoreし、公開してよい値だけをコードに載せる。
+  - GitHubのリポジトリを使ってコードを共有し、GitHubのソース共有だけではiOS/Androidのインストール用アプリ配布や既存API/DBの移管にはならないことを明記する。
+  - Managed MobileのGitHub-canonical非対応により、個人GitHubは別コピーとして運用し、Manus側の変更を自動同期しないことを説明する。
+
 - [ ] Production環境・App Store Connect登録
+  - 現在はユーザー方針によりApp Store配布を保留し、GitHubソース共有を優先する。Apple Developer Program登録、App Store Connect作成、iOS App Store build/Submitは再依頼があるまで行わない。
   - [x] Express APIをNode.js/pnpm lockfile準拠でDocker buildできるようにし、`/api/health`を無認証readiness routeとして使う。
   - [x] 本番APIの安定した公開HTTPS URLと、運営者名・問い合わせメール・公開プライバシーポリシーURL・公開サポートURLをproduction環境から取得する。Preview URLや仮の連絡先は登録しない。
   - `app.config.ts`はproduction buildでAPI・privacy/support URL・運営者名・問い合わせ先が未設定またはPreview URLの場合にbuildを拒否する。
