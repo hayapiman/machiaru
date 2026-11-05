@@ -76,13 +76,13 @@
   - 利用者へ削除受付結果、物理削除が完了するまでの状態、問い合わせ方法を示す。
   - 画像ファイルの物理削除はアプリ内APIで実行できないため、運営者が管理画面で削除後にアプリ内の受付を完了にする運用が必要。
 
-- [ ] プライバシーポリシーと問い合わせ先の公開準備
+- [x] プライバシーポリシーと問い合わせ先の公開準備
   - ログイン前からアプリ内で日本語プライバシーポリシーと問い合わせ導線を開ける。
   - メールアドレス、プロフィール、精密な位置情報/歩行ルート/日時、時間/速度/距離/歩数、スポット名/ノート/位置/写真、グループ共有先、保存目的、保存先、第三者処理、共有範囲、保持期間、削除方法、旧session再生成防止のためのHMAC fingerprint保持期間を実態に合わせて説明する。
   - 公開用のプライバシーポリシー (`/api/legal/privacy`) とサポートページ (`/api/legal/support`) を実装し、連絡先未設定時は503を返して公開準備中と示す。
   - 運営者名と公開可能な問い合わせメールを記載する。利用者から値を受け取るまでは仮の連絡先を捏造しない。
   - App Store Connect用のプライバシーポリシーURLとサポートURLには一時的なPreview URLでなく、安定した公開HTTPS URLを使う。
-  - 現時点で運営者名・メールアドレス・本番API URLは未確定のため、App Store提出前に環境設定を完了する。
+  - 2026-11-06時点でproductionの運営者表示名・公開窓口メールを登録し、本番APIを公開済み。health、プライバシー、サポートの各URLがHTTP 200を返すことを確認した。実際の公開値はチャットやGitへ記録しない。
 
 - [x] グループ共有コンテンツの安全対策
   - 共有する歩行ルート、スポット、写真、ノートをグループ作成者の確認前に他メンバーへ表示せず、作成者が承認または却下できる。
@@ -98,9 +98,10 @@
   - ネイティブのストアbuildはManaged Mobile Dashboardで行い、Sandbox上でEAS release buildを起動しない。
 
 - [ ] Production環境・App Store Connect登録
-  - Express APIをNode.js/pnpm lockfile準拠でDocker buildできるようにし、`/api/health`を無認証readiness routeとして使う。
-  - 本番APIの安定した公開HTTPS URLと、運営者名・問い合わせメール・公開プライバシーポリシーURL・公開サポートURLをproduction環境から取得する。Preview URLや仮の連絡先は登録しない。
+  - [x] Express APIをNode.js/pnpm lockfile準拠でDocker buildできるようにし、`/api/health`を無認証readiness routeとして使う。
+  - [x] 本番APIの安定した公開HTTPS URLと、運営者名・問い合わせメール・公開プライバシーポリシーURL・公開サポートURLをproduction環境から取得する。Preview URLや仮の連絡先は登録しない。
   - `app.config.ts`はproduction buildでAPI・privacy/support URL・運営者名・問い合わせ先が未設定またはPreview URLの場合にbuildを拒否する。
+  - iOS production build用の`EXPO_PUBLIC_API_BASE_URL`、`EXPO_PUBLIC_OPERATOR_NAME`、`EXPO_PUBLIC_SUPPORT_EMAIL`と必要に応じたprivacy/support URLをEAS production environmentへ設定し、App Store Connect情報を登録する。
   - App Store Connectのアプリレコード、SKU、年齢レーティング、App Privacy回答、スクリーンショット、審査用アカウント、App Review提出は別途完了する。
 
 - [x] 不要なiOS権限の整理
