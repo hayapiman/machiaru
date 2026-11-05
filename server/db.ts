@@ -19,13 +19,23 @@ export async function getDb() {
   return _db;
 }
 
+type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+type QueryExecutor = Pick<Database, "select">;
+
+async function hasDeletedAccountSession(db: QueryExecutor, openId: string): Promise<boolean> {
+  const now = new Date();
+  const openIdHash = hashDeletedSessionOpenId(openId, ENV.cookieSecret);
+  const [entry] = await db
+    .select({ openIdHash: deletedAccountSessions.openIdHash })
+    .from(deletedAccountSessions)
+    .where(and(eq(deletedAccountSessions.openIdHash, openIdHash), gt(deletedAccountSessions.expiresAt, now)))
+    .limit(1);
+  return Boolean(entry);
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
-  }
-
-  if (await isDeletedAccountSession(user.openId)) {
-    throw new Error("Cannot restore an account with a revoked session.");
   }
 
   const db = await getDb();
@@ -35,6 +45,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
+    if (await isDeletedAccountSession(user.openId)) {
+      throw new Error("Cannot restore an account with a revoked session.");
+    }
+
     const values: InsertUser = {
       openId: user.openId,
     };
@@ -73,9 +87,32 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    const [existingUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.openId, user.openId))
+      .limit(1);
+
+    if (existingUser) {
+      // Serialize existing-session upserts with account deletion using the same user-row lock.
+      await db.transaction(async (tx) => {
+        await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.openId, user.openId))
+          .limit(1)
+          .for("update");
+        if (await hasDeletedAccountSession(tx, user.openId)) {
+          throw new Error("Cannot restore an account with a revoked session.");
+        }
+        await tx.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+      });
+    } else {
+      if (await isDeletedAccountSession(user.openId)) {
+        throw new Error("Cannot restore an account with a revoked session.");
+      }
+      await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    }
   } catch (error) {
     console.error("[Database] Failed to upsert user");
     throw error;
@@ -110,13 +147,7 @@ export async function isDeletedAccountSession(openId: string): Promise<boolean> 
     }
   }
 
-  const openIdHash = hashDeletedSessionOpenId(openId, ENV.cookieSecret);
-  const [entry] = await db
-    .select({ openIdHash: deletedAccountSessions.openIdHash })
-    .from(deletedAccountSessions)
-    .where(and(eq(deletedAccountSessions.openIdHash, openIdHash), gt(deletedAccountSessions.expiresAt, now)))
-    .limit(1);
-  return Boolean(entry);
+  return hasDeletedAccountSession(db, openId);
 }
 
 // TODO: add feature queries here as your schema grows.

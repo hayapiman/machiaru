@@ -23,7 +23,13 @@ export async function deleteAccount(userId: number) {
   if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is unavailable." });
 
   return db.transaction(async (tx) => {
-    const [user] = await tx.select({ id: users.id, openId: users.openId }).from(users).where(eq(users.id, userId)).limit(1);
+    // Lock the same user row that a legacy-session upsert locks before it checks revocation.
+    const [user] = await tx
+      .select({ id: users.id, openId: users.openId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .for("update");
     if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "アカウントが見つかりません。" });
 
     const [profile] = await tx

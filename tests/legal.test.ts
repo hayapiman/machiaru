@@ -80,12 +80,12 @@ describe("public legal routes", () => {
     expect(state.body).toContain("support@example.jp");
   });
 
-  it("does not publish either page with placeholder contact values", () => {
+  it.each(["/api/legal/privacy", "/api/legal/support"])("does not publish %s with placeholder contact values", (path) => {
     vi.stubEnv("MACHIARU_OPERATOR_NAME", "");
     vi.stubEnv("EXPO_PUBLIC_OPERATOR_NAME", "");
     vi.stubEnv("MACHIARU_SUPPORT_EMAIL", "");
     vi.stubEnv("EXPO_PUBLIC_SUPPORT_EMAIL", "");
-    const handler = getHandler("/api/legal/privacy");
+    const handler = getHandler(path);
     const { state, response } = createResponse();
 
     handler({} as Request, response);

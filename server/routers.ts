@@ -391,7 +391,7 @@ export const appRouter = router({
           }
           await requireGroupMember(db, photo.groupId, ctx.user.id);
           if (photo.moderationStatus === "pending") await requireGroupOwner(db, photo.groupId, ctx.user.id);
-          else await requireUsersNotBlocked(db, ctx.user.id, photo.ownerUserId);
+          await requireUsersNotBlocked(db, ctx.user.id, photo.ownerUserId);
         }
         try {
           return { url: await storageGetSignedUrl(photo.storageKey) };
@@ -669,6 +669,13 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const db = await requireDb();
         await requireGroupOwner(db, input.groupId, ctx.user.id);
+        const blockedUserIds = await getBlockedUserIds(db, ctx.user.id);
+        const excludedWalkAuthors = blockedUserIds.length > 0
+          ? notInArray(walkSessions.userId, blockedUserIds)
+          : undefined;
+        const excludedSpotAuthors = blockedUserIds.length > 0
+          ? notInArray(visitedSpots.userId, blockedUserIds)
+          : undefined;
         const walks = await db
           .select({
             id: walkSessions.id,
@@ -685,7 +692,7 @@ export const appRouter = router({
           .from(walkSessions)
           .innerJoin(users, eq(walkSessions.userId, users.id))
           .leftJoin(userProfiles, eq(userProfiles.userId, users.id))
-          .where(and(eq(walkSessions.groupId, input.groupId), eq(walkSessions.moderationStatus, "pending")))
+          .where(and(eq(walkSessions.groupId, input.groupId), eq(walkSessions.moderationStatus, "pending"), excludedWalkAuthors))
           .orderBy(desc(walkSessions.startedAt))
           .limit(50);
         const spots = await db
@@ -703,7 +710,7 @@ export const appRouter = router({
           .from(visitedSpots)
           .innerJoin(users, eq(visitedSpots.userId, users.id))
           .leftJoin(userProfiles, eq(userProfiles.userId, users.id))
-          .where(and(eq(visitedSpots.groupId, input.groupId), eq(visitedSpots.moderationStatus, "pending")))
+          .where(and(eq(visitedSpots.groupId, input.groupId), eq(visitedSpots.moderationStatus, "pending"), excludedSpotAuthors))
           .orderBy(desc(visitedSpots.visitedAt))
           .limit(50);
         const photos = spots.length
@@ -828,11 +835,12 @@ export const appRouter = router({
         await requireGroupOwner(db, input.groupId, ctx.user.id);
         const targetTable = input.targetType === "walk" ? walkSessions : visitedSpots;
         const [target] = await db
-          .select({ id: targetTable.id })
+          .select({ id: targetTable.id, userId: targetTable.userId })
           .from(targetTable)
           .where(and(eq(targetTable.id, input.targetId), eq(targetTable.groupId, input.groupId), eq(targetTable.moderationStatus, "pending")))
           .limit(1);
         if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "確認待ちの投稿が見つかりません。" });
+        await requireUsersNotBlocked(db, ctx.user.id, target.userId);
         await db.update(targetTable)
           .set({ moderationStatus: input.decision === "approve" ? "approved" : "rejected" })
           .where(eq(targetTable.id, input.targetId));
