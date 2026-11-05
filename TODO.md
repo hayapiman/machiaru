@@ -98,6 +98,7 @@
   - ネイティブのストアbuildはManaged Mobile Dashboardで行い、Sandbox上でEAS release buildを起動しない。
 
 - [ ] Production環境・App Store Connect登録
+  - Express APIをNode.js/pnpm lockfile準拠でDocker buildできるようにし、`/api/health`を無認証readiness routeとして使う。
   - 本番APIの安定した公開HTTPS URLと、運営者名・問い合わせメール・公開プライバシーポリシーURL・公開サポートURLをproduction環境から取得する。Preview URLや仮の連絡先は登録しない。
   - `app.config.ts`はproduction buildでAPI・privacy/support URL・運営者名・問い合わせ先が未設定またはPreview URLの場合にbuildを拒否する。
   - App Store Connectのアプリレコード、SKU、年齢レーティング、App Privacy回答、スクリーンショット、審査用アカウント、App Review提出は別途完了する。
