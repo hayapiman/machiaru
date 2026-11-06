@@ -4,7 +4,7 @@
 
 ## いまの方針
 
-App Storeの有料配布は現在の目標から外し、個人GitHubでソースを共有する方針です。ソース用リポジトリの作成と初回pushはまだ完了していません。初期設定は安全のためPrivate（非公開）とし、Publicに変更する場合はソースを一般公開してよいことを確認してから行います。
+App Storeの有料配布は現在の目標から外し、個人GitHubでソースを共有する方針です。2026年11月6日に [hayapiman/machiaru](https://github.com/hayapiman/machiaru) をPrivate（非公開）で作成し、検査済みの`main`を初回pushしました。共有相手にはGitHubでCollaboratorとしてアクセスを付与してください。Publicに変更する場合は、ソースを一般公開してよいことを確認してから行います。
 
 ### GitHubで共有できるもの
 
@@ -28,7 +28,7 @@ Expo Goは画面確認などの開発プレビュー用です。バックグラ�
 
 `.env`と`.env.*`はGitから除外し、例示用の`.env.example`だけを追加できる設定にしています。公開API URLや公開連絡先などの`EXPO_PUBLIC_*`値はアプリbundleに含まれるため、秘密として使ってはいけません。`MANUS_JWT_SECRET`、`DATABASE_URL`、`BUILT_IN_FORGE_API_KEY`、Expo token、署名ファイル・passwordなどをGitHubへcommitしないでください。
 
-今回の確認では、到達可能な16件のGit commit、241個の固有Git blobを調べ、追跡された`.env`/証明書ファイルと一般的な秘密鍵・GitHub/API credential形式は見つかりませんでした。この自動検査は全種類の秘密情報を保証するものではないため、公開設定に変える前に新規変更を確認してください。誤って秘密をcommitした場合、ファイルを削除しても履歴に残るので、該当credentialを失効・更新してください。
+今回の確認では、pushしたGit履歴全体を対象に、追跡された`.env`/証明書ファイルと一般的な秘密鍵・GitHub/API credential形式がないことを検査しました。この自動検査は全種類の秘密情報を保証するものではないため、Public設定へ変える前にも新規変更を確認してください。誤って秘密をcommitした場合、ファイルを削除しても履歴に残るので、該当credentialを失効・更新してください。
 
 ## App Store資料
 

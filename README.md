@@ -43,7 +43,7 @@ APIをローカルで起動するには、対応するManaged Servicesまたは�
 
 APIは[本番エンドポイント](https://machiaru-9ymngagw.manus.space/api/health)で稼働中です。プライバシーポリシーは[こちら](https://machiaru-9ymngagw.manus.space/api/legal/privacy)、サポートは[こちら](https://machiaru-9ymngagw.manus.space/api/legal/support)です。これらのAPI、Managed MySQL、写真Storage、Maps proxyはGitHub上のソースとは別に稼働し、GitHubへpushしても移転・停止・再デプロイされません。
 
-現在の配布方針は個人GitHubでのソース共有です。Managed Mobileの制約でGitHubをcanonical repositoryに切り替えられないため、GitHubは別コピーであり、Manus側の更新は自動同期されません。詳細は[GitHub共有・運用ガイド](docs/github-sharing.ja.md)を参照してください。
+現在の配布方針は[個人GitHubのソースリポジトリ](https://github.com/hayapiman/machiaru)での共有です（Private）。共有相手にはGitHubでCollaboratorとしてアクセスを付与してください。Managed Mobileの制約でGitHubをcanonical repositoryに切り替えられないため、GitHubは別コピーであり、Manus側の更新は自動同期されません。詳細は[GitHub共有・運用ガイド](docs/github-sharing.ja.md)を参照してください。
 
 GitHubでコードを閲覧できることと、端末へアプリをインストールできることは別です。このリポジトリには配布用IPA/APKはありません。iOSのストア配布や署名済みbuild、Android向け直接配布には別途build・署名・配布設定が必要です。App Store公開は現在の目標ではありません。
 

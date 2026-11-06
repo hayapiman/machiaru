@@ -17,7 +17,7 @@
 - **実行/配布設定**: Express APIはNode/pnpmを固定したroot `Dockerfile`でcontainer化し、無認証`/api/health`をdeployment readiness pathとして公開済み。運営者名・公開連絡先とprivacy/supportページもproduction設定済み。API、Managed MySQL、Storage、Maps proxyは個人GitHubに移管されず、既存のManus環境で稼働する。`eas.json`には従来のストアbuild profileが残るが、App Store build/Submitは現時点の目標ではない。GitHubにソースを置いてもiOS/Androidインストール用アプリは生成されない。サーバー秘密鍵をExpo公開extraやGitへ含めない。
 - **不要な権限**: アプリで録音/動画再生を使っていないことをソース検索で確認し、未使用のaudio/video依存、マイク・バックグラウンド再生/PiP権限を外す。写真、位置、歩数に必要な目的文は日本語で正確に保つ。
 
-- **GitHubソース共有**: 個人GitHubへのソース共有用リポジトリを新規作成し、秘密情報を除いた`main`とREADME/日本語ガイドをpushする。初期公開範囲はPrivateとし、Publicへの変更は所有者の明示判断がある場合だけ行う。ライセンスは所有者が選ぶまで追加しない。
+- **GitHubソース共有**: 2026年11月6日に`hayapiman/machiaru`をPrivateで作成し、秘密情報を除いた`main`とREADME/日本語ガイドを初回pushした。初期公開範囲はPrivateのまま維持し、Publicへの変更は所有者の明示判断がある場合だけ行う。ライセンスは所有者が選ぶまで追加しない。
 
 ## デザイン — 旅の手帖コラージュ
 
